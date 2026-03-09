@@ -9,12 +9,14 @@
       - /carla/ego_vehicle/gnss
       - /carla/ego_vehicle/lidar_front/point_cloud
       - /carla/ego_vehicle/rgb_view/image
+      - /clock
     dds2zenoh.topic_types:
       - sensor_msgs/msg/Image
       - sensor_msgs/msg/Imu
       - sensor_msgs/msg/NavSatFix
       - sensor_msgs/msg/PointCloud2
       - sensor_msgs/msg/Image
+      - rosgraph_msgs/msg/Clock
     dds2zenoh.qos_depths:
       - 10
     zenoh2dds.topics:
