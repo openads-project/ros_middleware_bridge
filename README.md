@@ -1,70 +1,72 @@
 # middleware_bridge
 
-Generische ROS 2 Middleware-Bridge für zwei Prozesse mit unterschiedlichen `RMW_IMPLEMENTATION`-Werten (z. B. `rmw_fastrtps_cpp` und `rmw_zenoh_cpp`).
+> Vibe-coded!
 
-Die Bridge arbeitet vollständig mit `rclcpp::SerializedMessage`:
-- Prozess A subscribed lokal auf konfigurierten Topics, serialisiert und sendet über den konfigurierten Transport (`udp` oder `shm`).
-- Prozess B empfängt die Bytes und published sie wieder als Original-Message-Typ.
-- Symmetrisch in die Gegenrichtung.
+Generic ROS 2 middleware bridge for two processes running different `RMW_IMPLEMENTATION` values (for example `rmw_fastrtps_cpp` and `rmw_zenoh_cpp`).
 
-## Architektur
+The bridge forwards `rclcpp::SerializedMessage` data:
+- Process A subscribes on configured local topics and forwards serialized bytes via the configured transport (`udp` or `shm`).
+- Process B receives those bytes and republishes them as the original ROS message type.
+- The same applies in the opposite direction.
 
-Beide Prozesse nutzen denselben Node (`middleware_bridge`) und dieselbe zentrale Konfiguration:
+## Architecture
+
+Both processes run the same node (`middleware_bridge`) and use one shared configuration file:
 - `config/params.yml`
 
-Die Flows werden einmalig als Richtungen definiert:
+Flows are defined once per direction:
 - `dds2zenoh.topics`, `dds2zenoh.topic_types`, `dds2zenoh.transports`, `dds2zenoh.qos_depths`
 - `zenoh2dds.topics`, `zenoh2dds.topic_types`, `zenoh2dds.transports`, `zenoh2dds.qos_depths`
 
-Jeder Node setzt nur noch seine Rolle:
-- `bridge_role: dds` für `bridge_fast`
-- `bridge_role: zenoh` für `bridge_zenoh`
+Each process only sets its role:
+- `bridge_role: dds` for `bridge_fast`
+- `bridge_role: zenoh` for `bridge_zenoh`
 
-Der Node baut daraus automatisch `tx-only`/`rx-only`-Kanäle.
+The node derives `tx-only` / `rx-only` channels automatically.
 
-Der Transport ist pro Topic konfigurierbar:
-- `udp` für kleine Nachrichten / Remote-fähig
-- `shm` (Shared Memory) für große lokale Nachrichten (z. B. `Image`, `PointCloud2`)
+Transport is configurable per topic:
+- `udp` for smaller messages and remote-capable communication
+- `shm` (shared memory) for large local messages (for example `Image`, `PointCloud2`)
 
-## Starten
+## Start
 
 ```bash
 ros2 launch middleware_bridge middleware_bridge_launch.py
 ```
 
 Default:
-- Node `bridge_fast` mit `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`
-- Node `bridge_zenoh` mit `RMW_IMPLEMENTATION=rmw_zenoh_cpp`
+- Node `bridge_fast` with `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`
+- Node `bridge_zenoh` with `RMW_IMPLEMENTATION=rmw_zenoh_cpp`
 
-## Parameter
+## Parameters
 
-| Parameter | Typ | Beschreibung |
+| Parameter | Type | Description |
 | --- | --- | --- |
-| `num_threads` | `int` | Threads für `MultiThreadedExecutor` |
-| `bridge_role` | `string` | `dds` oder `zenoh` |
-| `remote_host` | `string` | IPv4-Zieladresse für UDP-Send |
-| `shm_namespace` | `string` | Namespace für SHM-Kanalnamen |
-| `tx_port` | `int` | UDP-Sendeport zur Gegenstelle |
-| `rx_port` | `int` | UDP-Port, auf dem empfangen wird |
-| `socket_buffer_bytes` | `int` | Send/Receive Socket Buffer |
-| `max_udp_payload_bytes` | `int` | Maximale UDP-Datagrammgröße pro Fragment (inkl. Header) |
-| `max_shm_message_bytes` | `int` | Maximale SHM-Nachrichtengröße pro Kanal |
-| `shm_poll_interval_us` | `int` | Polling-Intervall für SHM-Empfang |
-| `reassembly_timeout_ms` | `int` | Timeout für unvollständige Fragment-Reassemblies |
-| `dds2zenoh.topics` | `string[]` | Topics in Richtung DDS -> Zenoh |
-| `dds2zenoh.topic_types` | `string[]` | Typen zu `dds2zenoh.topics` |
-| `dds2zenoh.transports` | `string[]` | `udp` oder `shm` (leer, 1 global oder pro Topic) |
-| `dds2zenoh.qos_depths` | `int[]` | QoS (leer, 1 global oder pro Topic) |
-| `zenoh2dds.topics` | `string[]` | Topics in Richtung Zenoh -> DDS |
-| `zenoh2dds.topic_types` | `string[]` | Typen zu `zenoh2dds.topics` |
-| `zenoh2dds.transports` | `string[]` | `udp` oder `shm` (leer, 1 global oder pro Topic) |
-| `zenoh2dds.qos_depths` | `int[]` | QoS (leer, 1 global oder pro Topic) |
+| `num_threads` | `int` | Number of threads for `MultiThreadedExecutor` |
+| `bridge_role` | `string` | `dds` or `zenoh` |
+| `remote_host` | `string` | IPv4 destination for UDP send |
+| `shm_namespace` | `string` | Namespace prefix for shared-memory channel names |
+| `tx_port` | `int` | UDP transmit port |
+| `rx_port` | `int` | UDP receive port |
+| `socket_buffer_bytes` | `int` | Socket send/receive buffer size |
+| `max_udp_payload_bytes` | `int` | Maximum UDP datagram size per fragment (including header) |
+| `max_shm_message_bytes` | `int` | Maximum message size per shared-memory channel |
+| `shm_poll_interval_us` | `int` | Poll interval for shared-memory receiver loop |
+| `reassembly_timeout_ms` | `int` | Timeout for incomplete UDP fragment reassembly |
+| `dds2zenoh.topics` | `string[]` | Topics bridged from DDS to Zenoh |
+| `dds2zenoh.topic_types` | `string[]` | Types for `dds2zenoh.topics` |
+| `dds2zenoh.transports` | `string[]` | `udp` or `shm` (empty, single global value, or per-topic) |
+| `dds2zenoh.qos_depths` | `int[]` | QoS KeepLast depth (empty, single global value, or per-topic) |
+| `zenoh2dds.topics` | `string[]` | Topics bridged from Zenoh to DDS |
+| `zenoh2dds.topic_types` | `string[]` | Types for `zenoh2dds.topics` |
+| `zenoh2dds.transports` | `string[]` | `udp` or `shm` (empty, single global value, or per-topic) |
+| `zenoh2dds.qos_depths` | `int[]` | QoS KeepLast depth (empty, single global value, or per-topic) |
 
-## Hinweise
+## Notes
 
-- Topic-Reihenfolge ist relevant: beide Nodes verwenden dieselbe Kanalreihenfolge aus der gemeinsamen Datei.
-- Die Default-`params.yml` enthält die konkreten CARLA-Flows (`dds2zenoh` und `zenoh2dds`) aus diesem Projekt.
-- Große Messages (z. B. `Image`, `PointCloud2`) können pro Topic über `shm` laufen oder über fragmentiertes `udp`.
-- `shm` funktioniert nur auf derselben Maschine; für verteilte Setups `udp` verwenden.
-- SHM-Kanäle nutzen aktuell Latest-Sample-Verhalten (bei Überlast wird die ältere Probe überschrieben).
-- Aktuell ist UDP auf IPv4 ausgelegt.
+- Topic order matters: both nodes must use identical channel ordering from the shared config.
+- The default `params.yml` contains CARLA-specific flows (`dds2zenoh` and `zenoh2dds`) used in this project.
+- Large messages (for example `Image`, `PointCloud2`) can run on `shm` per topic, or on fragmented `udp`.
+- `shm` is local-host only; use `udp` for distributed setups.
+- SHM channels currently use latest-sample behavior (older samples can be overwritten under load).
+- UDP support is currently IPv4-only.
