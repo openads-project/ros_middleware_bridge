@@ -49,11 +49,18 @@ void MiddlewareBridge::declareAndLoadParameters() {
       bridge_role_.end(),
       bridge_role_.begin(),
       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (bridge_role_ == "fast" || bridge_role_ == "fastrtps" || bridge_role_ == "fastrtps_cpp") {
+  if (bridge_role_ == "fast" || bridge_role_ == "fastrtps" || bridge_role_ == "fastrtps_cpp" ||
+      bridge_role_ == "rmw_fastrtps_cpp" || bridge_role_ == "rmw_fast_rtps" || bridge_role_ == "rmw_fastdds_cpp") {
     bridge_role_ = "dds";
   }
+  if (bridge_role_ == "zenoh_cpp" || bridge_role_ == "rmw_zenoh_cpp" || bridge_role_ == "rmw_zenoh_c" ||
+      bridge_role_ == "zenoh") {
+    bridge_role_ = "zenoh";
+  }
   if (bridge_role_ != "dds" && bridge_role_ != "zenoh") {
-    throw std::runtime_error("Parameter 'bridge_role' must be either 'dds' or 'zenoh'.");
+    throw std::runtime_error(
+        "Parameter 'bridge_role' must resolve to 'dds' or 'zenoh' (e.g. dds, fast, fastrtps_cpp, rmw_fastrtps_cpp, "
+        "zenoh, zenoh_cpp, rmw_zenoh_cpp).");
   }
 
   auto validate_direction = [](const std::string & direction_name,
