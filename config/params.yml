@@ -9,32 +9,26 @@
     shm_poll_interval_us: 1000
     reassembly_timeout_ms: 1000
     dds2zenoh.topics:
-      - /carla/ego_vehicle/karl_rack_cameras/camera_front_center/image
-      - /carla/ego_vehicle/imu
-      - /carla/ego_vehicle/gnss
-      - /carla/ego_vehicle/lidar_front/point_cloud
-      - /carla/ego_vehicle/rgb_view/image
       - /clock
       - /tf
       - /tf_static
+      - /image
+      - /image/camera_info
+      - /point_cloud
     dds2zenoh.topic_types:
-      - sensor_msgs/msg/Image
-      - sensor_msgs/msg/Imu
-      - sensor_msgs/msg/NavSatFix
-      - sensor_msgs/msg/PointCloud2
-      - sensor_msgs/msg/Image
       - rosgraph_msgs/msg/Clock
       - tf2_msgs/msg/TFMessage
       - tf2_msgs/msg/TFMessage
+      - sensor_msgs/msg/Image
+      - sensor_msgs/msg/CameraInfo
+      - sensor_msgs/msg/PointCloud2
     dds2zenoh.transports:
+      - udp
+      - udp
+      - udp
       - shm
       - udp
-      - udp
       - shm
-      - shm
-      - udp
-      - udp
-      - udp
     dds2zenoh.qos_depths:
       - 10
     zenoh2dds.topics:
