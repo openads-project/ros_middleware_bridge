@@ -112,6 +112,23 @@ void MiddlewareBridge::declareAndLoadParameters() {
   zenoh2dds_transports_ = declare_string_array_parameter("zenoh2dds.transports", std::vector<std::string>{}, false);
   zenoh2dds_qos_depths_ = this->declare_parameter<std::vector<int64_t>>("zenoh2dds.qos_depths", std::vector<int64_t>{});
 
+  auto normalize_auto_discovery_topics = [](std::vector<std::string> & topics) {
+    if (topics.size() != 1U) {
+      return;
+    }
+    std::string value = topics.front();
+    std::transform(
+        value.begin(),
+        value.end(),
+        value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (value.empty() || value == "__auto__" || value == "__auto_discovery__") {
+      topics.clear();
+    }
+  };
+  normalize_auto_discovery_topics(dds2zenoh_topics_);
+  normalize_auto_discovery_topics(zenoh2dds_topics_);
+
   std::transform(
       bridge_role_.begin(),
       bridge_role_.end(),

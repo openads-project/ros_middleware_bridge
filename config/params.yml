@@ -10,7 +10,8 @@
     reassembly_timeout_ms: 1000
     auto_discovery_wait_ms: 1000
     auto_discovery_poll_ms: 1000
-    dds2zenoh.topics: []
+    dds2zenoh.topics:
+      - __auto__
     dds2zenoh.topic_types:
       - rosgraph_msgs/msg/Clock
       - tf2_msgs/msg/TFMessage

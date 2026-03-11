@@ -17,7 +17,7 @@ Both processes run the same node (`middleware_bridge`) and use one shared config
 Flows are defined once per direction:
 - `dds2zenoh.topics`, `dds2zenoh.topic_types`, `dds2zenoh.transports`, `dds2zenoh.qos_depths`
 - `zenoh2dds.topics`, `zenoh2dds.topic_types`, `zenoh2dds.transports`, `zenoh2dds.qos_depths`
-- Optional auto-discovery mode: set `<direction>.topics: []` and list only `<direction>.topic_types`.
+- Optional auto-discovery mode: set `<direction>.topics` to `["__auto__"]` (or leave it unset) and list only `<direction>.topic_types`.
 
 Each process only sets its role:
 - `bridge_role: dds` for `bridge_fast`
@@ -56,11 +56,11 @@ Default:
 | `reassembly_timeout_ms` | `int` | Timeout for incomplete UDP fragment reassembly |
 | `auto_discovery_wait_ms` | `int` | Optional wait before the initial auto-discovery scan (0 disables waiting) |
 | `auto_discovery_poll_ms` | `int` | Poll interval for runtime auto-discovery scans |
-| `dds2zenoh.topics` | `string[]` | Static mode: explicit topics. Auto mode: set `[]` and use `dds2zenoh.topic_types` only |
+| `dds2zenoh.topics` | `string[]` | Static mode: explicit topics. Auto mode: set `["__auto__"]` (or omit value) and use `dds2zenoh.topic_types` only |
 | `dds2zenoh.topic_types` | `string[]` | Static mode: type per topic. Auto mode: type filters for discovered topics |
 | `dds2zenoh.transports` | `string[]` | `udp` or `shm` (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
 | `dds2zenoh.qos_depths` | `int[]` | QoS KeepLast depth (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
-| `zenoh2dds.topics` | `string[]` | Static mode: explicit topics. Auto mode: set `[]` and use `zenoh2dds.topic_types` only |
+| `zenoh2dds.topics` | `string[]` | Static mode: explicit topics. Auto mode: set `["__auto__"]` (or omit value) and use `zenoh2dds.topic_types` only |
 | `zenoh2dds.topic_types` | `string[]` | Static mode: type per topic. Auto mode: type filters for discovered topics |
 | `zenoh2dds.transports` | `string[]` | `udp` or `shm` (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
 | `zenoh2dds.qos_depths` | `int[]` | QoS KeepLast depth (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |

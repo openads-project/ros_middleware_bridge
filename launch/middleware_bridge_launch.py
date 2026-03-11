@@ -14,6 +14,7 @@ def generate_launch_description():
     default_params = os.path.join(package_share, "config", "params.yml")
 
     launch_args = [
+        DeclareLaunchArgument("params_file", default_value=default_params, description="parameter file path"),
         DeclareLaunchArgument("namespace", default_value="", description="node namespace"),
         DeclareLaunchArgument("log_level", default_value="info", description="ROS logging level (debug, info, warn, error, fatal)"),
         DeclareLaunchArgument("use_sim_time", default_value="false", description="use simulation clock"),
@@ -25,7 +26,7 @@ def generate_launch_description():
             executable="middleware_bridge",
             namespace=LaunchConfiguration("namespace"),
             name="bridge_fast",
-            parameters=[default_params],
+            parameters=[LaunchConfiguration("params_file")],
             arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
             additional_env={"RMW_IMPLEMENTATION": "rmw_fastrtps_cpp"},
             output="screen",
@@ -36,7 +37,7 @@ def generate_launch_description():
             executable="middleware_bridge",
             namespace=LaunchConfiguration("namespace"),
             name="bridge_zenoh",
-            parameters=[default_params],
+            parameters=[LaunchConfiguration("params_file")],
             arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
             additional_env={"RMW_IMPLEMENTATION": "rmw_zenoh_cpp"},
             output="screen",
