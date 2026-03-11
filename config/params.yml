@@ -1,11 +1,11 @@
 /**:
   ros__parameters:
-    num_threads: 2
+    num_threads: 8
     remote_host: 127.0.0.1
     shm_namespace: middleware_bridge
     socket_buffer_bytes: 1048576
     max_udp_payload_bytes: 60000
-    max_shm_message_bytes: 16777216
+    max_shm_message_bytes: 50331648  # 48 MiB as default in 'rmw_zenoh'
     shm_poll_interval_us: 1000
     reassembly_timeout_ms: 1000
     auto_discovery_wait_ms: 1000
@@ -14,17 +14,27 @@
     dds2zenoh.topic_types:
       - rosgraph_msgs/msg/Clock
       - tf2_msgs/msg/TFMessage
+      - sensor_msgs/msg/Imu
+      - sensor_msgs/msg/NavSatFix
       - sensor_msgs/msg/Image
       - sensor_msgs/msg/CameraInfo
       - sensor_msgs/msg/PointCloud2
     dds2zenoh.transports:
       - udp
       - udp
+      - udp
+      - udp
       - shm
       - udp
       - shm
     dds2zenoh.qos_depths:
-      - 10
+      - 5
+      - 5
+      - 5
+      - 5
+      - 1
+      - 5
+      - 1
     zenoh2dds.topics:
       - /carla/ego_vehicle/vehicle_control_cmd
     zenoh2dds.topic_types:
@@ -32,7 +42,7 @@
     zenoh2dds.transports:
       - udp
     zenoh2dds.qos_depths:
-      - 10
+      - 1
 
 bridge_fast:
   ros__parameters:

@@ -68,6 +68,24 @@ MiddlewareBridge::~MiddlewareBridge() {
 }
 
 void MiddlewareBridge::declareAndLoadParameters() {
+  auto declare_string_array_parameter = [this](const std::string & name,
+                                               const std::vector<std::string> & default_value,
+                                               bool fallback_to_empty_on_unset) -> std::vector<std::string> {
+    try {
+      return this->declare_parameter<std::vector<std::string>>(name, default_value);
+    } catch (const rclcpp::exceptions::InvalidParameterValueException & ex) {
+      const std::string message = ex.what();
+      if (fallback_to_empty_on_unset && message.find("No parameter value set") != std::string::npos) {
+        RCLCPP_WARN(
+            this->get_logger(),
+            "Parameter '%s' is set without value. Falling back to empty list.",
+            name.c_str());
+        return {};
+      }
+      throw;
+    }
+  };
+
   num_threads_ = this->declare_parameter<int>("num_threads", 1);
   bridge_role_ = this->declare_parameter<std::string>("bridge_role", "dds");
   remote_host_ = this->declare_parameter<std::string>("remote_host", "127.0.0.1");
@@ -82,16 +100,16 @@ void MiddlewareBridge::declareAndLoadParameters() {
   auto_discovery_wait_ms_ = this->declare_parameter<int>("auto_discovery_wait_ms", 0);
   auto_discovery_poll_ms_ = this->declare_parameter<int>("auto_discovery_poll_ms", 1000);
 
-  dds2zenoh_topics_ = this->declare_parameter<std::vector<std::string>>(
-      "dds2zenoh.topics", std::vector<std::string>{"/bridge/dds2zenoh/example"});
-  dds2zenoh_topic_types_ = this->declare_parameter<std::vector<std::string>>(
-      "dds2zenoh.topic_types", std::vector<std::string>{"geometry_msgs/msg/PointStamped"});
-  dds2zenoh_transports_ = this->declare_parameter<std::vector<std::string>>("dds2zenoh.transports", std::vector<std::string>{});
+  dds2zenoh_topics_ = declare_string_array_parameter(
+      "dds2zenoh.topics", std::vector<std::string>{"/bridge/dds2zenoh/example"}, true);
+  dds2zenoh_topic_types_ = declare_string_array_parameter(
+      "dds2zenoh.topic_types", std::vector<std::string>{"geometry_msgs/msg/PointStamped"}, false);
+  dds2zenoh_transports_ = declare_string_array_parameter("dds2zenoh.transports", std::vector<std::string>{}, false);
   dds2zenoh_qos_depths_ = this->declare_parameter<std::vector<int64_t>>("dds2zenoh.qos_depths", std::vector<int64_t>{10});
 
-  zenoh2dds_topics_ = this->declare_parameter<std::vector<std::string>>("zenoh2dds.topics", std::vector<std::string>{});
-  zenoh2dds_topic_types_ = this->declare_parameter<std::vector<std::string>>("zenoh2dds.topic_types", std::vector<std::string>{});
-  zenoh2dds_transports_ = this->declare_parameter<std::vector<std::string>>("zenoh2dds.transports", std::vector<std::string>{});
+  zenoh2dds_topics_ = declare_string_array_parameter("zenoh2dds.topics", std::vector<std::string>{}, true);
+  zenoh2dds_topic_types_ = declare_string_array_parameter("zenoh2dds.topic_types", std::vector<std::string>{}, false);
+  zenoh2dds_transports_ = declare_string_array_parameter("zenoh2dds.transports", std::vector<std::string>{}, false);
   zenoh2dds_qos_depths_ = this->declare_parameter<std::vector<int64_t>>("zenoh2dds.qos_depths", std::vector<int64_t>{});
 
   std::transform(
