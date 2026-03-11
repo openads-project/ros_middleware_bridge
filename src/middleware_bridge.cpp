@@ -15,6 +15,7 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 #include <middleware_bridge/middleware_bridge.hpp>
@@ -579,6 +580,21 @@ void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel & channel, const s
 
   const std::size_t mapping_size = sizeof(ShmChannelHeader) + static_cast<std::size_t>(max_shm_message_bytes_);
   const std::string shm_name = "/mb_" + ns + "_ch_" + std::to_string(channel_index);
+  struct statvfs shm_stats {};
+  if (::statvfs("/dev/shm", &shm_stats) == 0) {
+    const std::uint64_t available_bytes =
+        static_cast<std::uint64_t>(shm_stats.f_bavail) * static_cast<std::uint64_t>(shm_stats.f_frsize);
+    if (available_bytes < static_cast<std::uint64_t>(mapping_size)) {
+      RCLCPP_WARN(
+          this->get_logger(),
+          "Shared-memory channel '%s' requests %zu bytes, but /dev/shm has only %llu bytes available. "
+          "Consider reducing max_shm_message_bytes, using fewer SHM channels, or increasing container --shm-size.",
+          shm_name.c_str(),
+          mapping_size,
+          static_cast<unsigned long long>(available_bytes));
+    }
+  }
+
   const int fd = ::shm_open(shm_name.c_str(), O_CREAT | O_RDWR, 0666);
   if (fd < 0) {
     throw std::runtime_error("Failed to open shared memory '" + shm_name + "': " + std::strerror(errno));
@@ -607,9 +623,8 @@ void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel & channel, const s
     header->sequence.store(0U, std::memory_order_relaxed);
     header->payload_size.store(0U, std::memory_order_relaxed);
     header->reserved.store(0U, std::memory_order_relaxed);
-    if (expected_capacity > 0U) {
-      std::memset(payload, 0, expected_capacity);
-    }
+    // Avoid touching the full SHM payload region during setup. In constrained
+    // /dev/shm environments this can trigger SIGBUS even before first payload write.
     header->magic.store(kShmMagic, std::memory_order_release);
   }
 
@@ -725,8 +740,25 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
     }
   };
 
-  scanDirection(dds2zenoh_auto_discovery_, true, "dds2zenoh", dds2zenoh_topic_types_, dds2zenoh_transports_, dds2zenoh_qos_depths_);
-  scanDirection(zenoh2dds_auto_discovery_, false, "zenoh2dds", zenoh2dds_topic_types_, zenoh2dds_transports_, zenoh2dds_qos_depths_);
+  // Auto-discovery is directional: only the source side of a direction scans
+  // the local graph; the destination side learns channels through announcements.
+  const bool discover_dds2zenoh_locally = dds2zenoh_auto_discovery_ && bridge_role_ == "dds";
+  const bool discover_zenoh2dds_locally = zenoh2dds_auto_discovery_ && bridge_role_ == "zenoh";
+
+  scanDirection(
+      discover_dds2zenoh_locally,
+      true,
+      "dds2zenoh",
+      dds2zenoh_topic_types_,
+      dds2zenoh_transports_,
+      dds2zenoh_qos_depths_);
+  scanDirection(
+      discover_zenoh2dds_locally,
+      false,
+      "zenoh2dds",
+      zenoh2dds_topic_types_,
+      zenoh2dds_transports_,
+      zenoh2dds_qos_depths_);
 
   if (added_count > 0U) {
     RCLCPP_INFO(this->get_logger(), "Auto-discovery added %zu new channel(s).", added_count);

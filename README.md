@@ -69,9 +69,12 @@ Default:
 
 - Topic order matters: both nodes must use identical channel ordering from the shared config.
 - Auto-discovery runs at startup and then continuously with `auto_discovery_poll_ms`.
+- Auto-discovery scans only on the source side of each direction (`dds2zenoh` on `bridge_role=dds`, `zenoh2dds` on `bridge_role=zenoh`).
+- The destination side creates matching channels from UDP control announcements.
 - Newly appearing matching topics are added at runtime with the configured per-type `transport`/`qos`.
 - Auto-discovered channels are announced to the remote bridge over UDP control packets.
 - Auto-discovery therefore requires valid UDP connectivity (`remote_host`, `tx_port`, `rx_port`) even when data transport is `shm`.
+- For `shm`, ensure `/dev/shm` is large enough for your configured channel capacity (`max_shm_message_bytes`) and number of SHM channels.
 - The default `params.yml` contains CARLA-specific flows (`dds2zenoh` and `zenoh2dds`) used in this project.
 - Large messages (for example `Image`, `PointCloud2`) can run on `shm` per topic, or on fragmented `udp`.
 - `shm` is local-host only; use `udp` for distributed setups.
