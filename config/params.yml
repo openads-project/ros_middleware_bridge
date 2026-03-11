@@ -8,22 +8,16 @@
     max_shm_message_bytes: 16777216
     shm_poll_interval_us: 1000
     reassembly_timeout_ms: 1000
-    dds2zenoh.topics:
-      - /clock
-      - /tf
-      - /tf_static
-      - /image
-      - /image/camera_info
-      - /point_cloud
+    auto_discovery_wait_ms: 1000
+    auto_discovery_poll_ms: 1000
+    dds2zenoh.topics: []
     dds2zenoh.topic_types:
       - rosgraph_msgs/msg/Clock
-      - tf2_msgs/msg/TFMessage
       - tf2_msgs/msg/TFMessage
       - sensor_msgs/msg/Image
       - sensor_msgs/msg/CameraInfo
       - sensor_msgs/msg/PointCloud2
     dds2zenoh.transports:
-      - udp
       - udp
       - udp
       - shm
