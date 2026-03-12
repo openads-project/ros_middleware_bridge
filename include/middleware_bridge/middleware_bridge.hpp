@@ -2,17 +2,19 @@
 
 #include <atomic>
 #include <cstdint>
+#include <limits>
 #include <mutex>
 #include <netinet/in.h>
 #include <string>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <rclcpp/generic_publisher.hpp>
 #include <rclcpp/generic_subscription.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialized_message.hpp>
-
 
 namespace middleware_bridge {
 
@@ -74,6 +76,23 @@ class MiddlewareBridge : public rclcpp::Node {
   void setupBridgeChannels();
   void setupSockets();
   void setupSharedMemoryChannels();
+  void setupSharedMemoryChannel(BridgeChannel & channel, const std::string & ns, std::size_t channel_index);
+  void runAutoDiscoveryScan();
+  std::size_t addChannelIfMissing(bool is_dds2zenoh,
+                                  const std::string & topic_name,
+                                  const std::string & topic_type,
+                                  const std::string & transport,
+                                  std::size_t qos_depth,
+                                  bool from_auto_discovery,
+                                  bool * added = nullptr);
+  void sendUdpPayload(std::uint16_t channel_id, const std::uint8_t * payload, std::size_t payload_size);
+  void announceAutoDiscoveredChannel(std::uint16_t channel_id,
+                                     bool is_dds2zenoh,
+                                     const std::string & topic_name,
+                                     const std::string & topic_type,
+                                     const std::string & transport,
+                                     std::size_t qos_depth);
+  void handleAutoDiscoveryAnnouncement(const std::uint8_t * payload, std::size_t payload_size);
   void receiverLoop();
   void shmReceiverLoop();
   void forwardSerializedMessage(std::size_t channel_index, rclcpp::SerializedMessage & message);
@@ -90,6 +109,8 @@ class MiddlewareBridge : public rclcpp::Node {
   int max_shm_message_bytes_ = 8 * 1024 * 1024;
   int shm_poll_interval_us_ = 1000;
   int reassembly_timeout_ms_ = 1000;
+  int auto_discovery_wait_ms_ = 0;
+  int auto_discovery_poll_ms_ = 1000;
   std::vector<std::string> dds2zenoh_topics_;
   std::vector<std::string> dds2zenoh_topic_types_;
   std::vector<std::string> dds2zenoh_transports_;
@@ -98,9 +119,16 @@ class MiddlewareBridge : public rclcpp::Node {
   std::vector<std::string> zenoh2dds_topic_types_;
   std::vector<std::string> zenoh2dds_transports_;
   std::vector<int64_t> zenoh2dds_qos_depths_;
+  bool dds2zenoh_auto_discovery_ = false;
+  bool zenoh2dds_auto_discovery_ = false;
+  bool auto_discovery_enabled_ = false;
+  std::unordered_set<std::string> channel_keys_;
+  std::unordered_map<std::uint16_t, std::size_t> remote_channel_to_local_index_;
   std::vector<BridgeChannel> channels_;
+  std::mutex channels_mutex_;
   bool use_udp_transport_ = false;
   bool use_shm_transport_ = false;
+  rclcpp::TimerBase::SharedPtr auto_discovery_timer_;
 
   int tx_socket_fd_ = -1;
   int rx_socket_fd_ = -1;
@@ -113,9 +141,9 @@ class MiddlewareBridge : public rclcpp::Node {
 
   static constexpr std::uint32_t kPacketMagic = 0x4D424452;  // "MBDR"
   static constexpr std::uint16_t kPacketVersion = 2;
+  static constexpr std::uint16_t kControlChannelId = std::numeric_limits<std::uint16_t>::max();
   static constexpr std::size_t kMaxUdpDatagramBytes = 65507;
   static constexpr std::uint32_t kShmMagic = 0x4D425348;  // "MBSH"
 };
-
 
 }  // namespace middleware_bridge
