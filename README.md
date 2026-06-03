@@ -59,11 +59,11 @@ Default:
 | `dds2zenoh.topics` | `string[]` | Static mode: explicit topics. Auto mode: set `["__auto__"]` (or omit value) and use `dds2zenoh.topic_types` only |
 | `dds2zenoh.topic_types` | `string[]` | Static mode: type per topic. Auto mode: type filters for discovered topics |
 | `dds2zenoh.transports` | `string[]` | `udp` or `shm` (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
-| `dds2zenoh.qos_depths` | `int[]` | QoS KeepLast depth (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
+| `dds2zenoh.qos_depths` | `int[]` | Minimum/fallback QoS KeepLast depth (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
 | `zenoh2dds.topics` | `string[]` | Static mode: explicit topics. Auto mode: set `["__auto__"]` (or omit value) and use `zenoh2dds.topic_types` only |
 | `zenoh2dds.topic_types` | `string[]` | Static mode: type per topic. Auto mode: type filters for discovered topics |
 | `zenoh2dds.transports` | `string[]` | `udp` or `shm` (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
-| `zenoh2dds.qos_depths` | `int[]` | QoS KeepLast depth (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
+| `zenoh2dds.qos_depths` | `int[]` | Minimum/fallback QoS KeepLast depth (empty/single/per-topic in static mode, empty/single/per-type in auto mode) |
 
 ## Notes
 
@@ -71,9 +71,12 @@ Default:
 - Auto-discovery runs at startup and then continuously with `auto_discovery_poll_ms`.
 - Auto-discovery scans only on the source side of each direction (`dds2zenoh` on `bridge_role=dds`, `zenoh2dds` on `bridge_role=zenoh`).
 - The destination side creates matching channels from UDP control announcements.
-- Newly appearing matching topics are added at runtime with the configured per-type `transport`/`qos`.
-- Auto-discovered channels are announced to the remote bridge over UDP control packets.
-- Auto-discovery therefore requires valid UDP connectivity (`remote_host`, `tx_port`, `rx_port`) even when data transport is `shm`.
+- Newly appearing matching topics are added at runtime with the configured per-type `transport` and source-side QoS.
+- Reliability, durability, history, and depth are read from source publisher endpoints and announced to the remote bridge.
+- `qos_depths` remains a minimum/fallback depth; this avoids collapsing transient-local topics such as `/tf_static` to a single cached bridge sample.
+- `/tf_static` falls back to reliable, transient-local QoS even if publisher endpoint QoS is not visible during startup.
+- Auto-discovered and static source channels are announced to the remote bridge over UDP control packets.
+- The control path therefore requires valid UDP connectivity (`remote_host`, `tx_port`, `rx_port`) even when data transport is `shm`.
 - For `shm`, ensure `/dev/shm` is large enough for your configured channel capacity (`max_shm_message_bytes`) and number of SHM channels.
 - The default `params.yml` contains CARLA-specific flows (`dds2zenoh` and `zenoh2dds`) used in this project.
 - Large messages (for example `Image`, `PointCloud2`) can run on `shm` per topic, or on fragmented `udp`.
