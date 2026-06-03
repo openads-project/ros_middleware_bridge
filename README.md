@@ -73,8 +73,8 @@ Default:
 - The destination side creates matching channels from UDP control announcements.
 - Newly appearing matching topics are added at runtime with the configured per-type `transport` and source-side QoS.
 - Reliability, durability, history, and depth are read from source publisher endpoints and announced to the remote bridge.
-- `qos_depths` remains a minimum/fallback depth; this avoids collapsing transient-local topics such as `/tf_static` to a single cached bridge sample.
-- `/tf_static` falls back to reliable, transient-local QoS even if publisher endpoint QoS is not visible during startup.
+- `qos_depths` remains a minimum/fallback depth for normal topics.
+- Output publishers on `/tf_static` always use reliable, keep-last depth 1, transient-local QoS.
 - Auto-discovered and static source channels are announced to the remote bridge over UDP control packets.
 - The control path therefore requires valid UDP connectivity (`remote_host`, `tx_port`, `rx_port`) even when data transport is `shm`.
 - For `shm`, ensure `/dev/shm` is large enough for your configured channel capacity (`max_shm_message_bytes`) and number of SHM channels.

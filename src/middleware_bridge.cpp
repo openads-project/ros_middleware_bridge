@@ -6,7 +6,6 @@
 #include <cstring>
 #include <fcntl.h>
 #include <limits>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -24,108 +23,6 @@
 namespace middleware_bridge {
 
 namespace {
-
-std::string toLower(std::string value) {
-  std::transform(
-      value.begin(),
-      value.end(),
-      value.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return value;
-}
-
-const char * reliabilityToString(const rmw_qos_reliability_policy_t reliability) {
-  switch (reliability) {
-    case RMW_QOS_POLICY_RELIABILITY_RELIABLE:
-      return "reliable";
-    case RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT:
-      return "best_effort";
-    case RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT:
-      return "system_default";
-    case RMW_QOS_POLICY_RELIABILITY_UNKNOWN:
-      return "unknown";
-  }
-  return "unknown";
-}
-
-const char * durabilityToString(const rmw_qos_durability_policy_t durability) {
-  switch (durability) {
-    case RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:
-      return "transient_local";
-    case RMW_QOS_POLICY_DURABILITY_VOLATILE:
-      return "volatile";
-    case RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT:
-      return "system_default";
-    case RMW_QOS_POLICY_DURABILITY_UNKNOWN:
-      return "unknown";
-  }
-  return "unknown";
-}
-
-const char * historyToString(const rmw_qos_history_policy_t history) {
-  switch (history) {
-    case RMW_QOS_POLICY_HISTORY_KEEP_LAST:
-      return "keep_last";
-    case RMW_QOS_POLICY_HISTORY_KEEP_ALL:
-      return "keep_all";
-    case RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT:
-      return "system_default";
-    case RMW_QOS_POLICY_HISTORY_UNKNOWN:
-      return "unknown";
-  }
-  return "unknown";
-}
-
-std::optional<rmw_qos_reliability_policy_t> reliabilityFromString(std::string value) {
-  value = toLower(std::move(value));
-  if (value == "reliable") {
-    return RMW_QOS_POLICY_RELIABILITY_RELIABLE;
-  }
-  if (value == "best_effort" || value == "besteffort") {
-    return RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
-  }
-  if (value == "system_default" || value == "system-default") {
-    return RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT;
-  }
-  if (value == "unknown") {
-    return RMW_QOS_POLICY_RELIABILITY_UNKNOWN;
-  }
-  return std::nullopt;
-}
-
-std::optional<rmw_qos_durability_policy_t> durabilityFromString(std::string value) {
-  value = toLower(std::move(value));
-  if (value == "transient_local" || value == "transient-local") {
-    return RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
-  }
-  if (value == "volatile") {
-    return RMW_QOS_POLICY_DURABILITY_VOLATILE;
-  }
-  if (value == "system_default" || value == "system-default") {
-    return RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT;
-  }
-  if (value == "unknown") {
-    return RMW_QOS_POLICY_DURABILITY_UNKNOWN;
-  }
-  return std::nullopt;
-}
-
-std::optional<rmw_qos_history_policy_t> historyFromString(std::string value) {
-  value = toLower(std::move(value));
-  if (value == "keep_last" || value == "keep-last") {
-    return RMW_QOS_POLICY_HISTORY_KEEP_LAST;
-  }
-  if (value == "keep_all" || value == "keep-all") {
-    return RMW_QOS_POLICY_HISTORY_KEEP_ALL;
-  }
-  if (value == "system_default" || value == "system-default") {
-    return RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT;
-  }
-  if (value == "unknown") {
-    return RMW_QOS_POLICY_HISTORY_UNKNOWN;
-  }
-  return std::nullopt;
-}
 
 bool isTfStaticTopic(const std::string & topic_name) {
   constexpr const char * suffix = "/tf_static";
@@ -545,9 +442,9 @@ MiddlewareBridge::BridgeQosProfile MiddlewareBridge::resolveSourceQos(const std:
   if (saw_transient_local && saw_volatile) {
     RCLCPP_WARN(
         this->get_logger(),
-        "Topic '%s' has mixed publisher durability. Using %s.",
+        "Topic '%s' has mixed publisher durability. Using durability policy %d.",
         topic_name.c_str(),
-        durabilityToString(resolved.durability));
+        static_cast<int>(resolved.durability));
   }
 
   return resolved;
@@ -569,15 +466,21 @@ rclcpp::QoS MiddlewareBridge::makeRclcppQos(const BridgeQosProfile & qos) const 
 }
 
 void MiddlewareBridge::createChannelEndpoints(BridgeChannel & channel, const std::size_t channel_index) {
-  const auto qos = makeRclcppQos(channel.qos);
   if (!channel.publish_topic.empty()) {
-    channel.publisher = this->create_generic_publisher(channel.publish_topic, channel.topic_type, qos);
+    auto publisher_qos = channel.qos;
+    if (isTfStaticTopic(channel.publish_topic)) {
+      publisher_qos.depth = 1U;
+      publisher_qos.history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
+      publisher_qos.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
+      publisher_qos.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
+    }
+    channel.publisher = this->create_generic_publisher(channel.publish_topic, channel.topic_type, makeRclcppQos(publisher_qos));
   }
   if (!channel.subscribe_topic.empty()) {
     channel.subscriber = this->create_generic_subscription(
         channel.subscribe_topic,
         channel.topic_type,
-        qos,
+        makeRclcppQos(channel.qos),
         [this, channel_index](std::shared_ptr<rclcpp::SerializedMessage> msg) {
           if (msg != nullptr) {
             this->forwardSerializedMessage(channel_index, *msg);
@@ -602,12 +505,12 @@ void MiddlewareBridge::updateChannelQos(const std::size_t channel_index,
 
   RCLCPP_INFO(
       this->get_logger(),
-      "Updated QoS for rule %zu from %s: reliability=%s durability=%s history=%s depth=%zu",
+      "Updated QoS for rule %zu from %s: reliability=%d durability=%d history=%d depth=%zu",
       channel_index,
       reason,
-      reliabilityToString(channel.qos.reliability),
-      durabilityToString(channel.qos.durability),
-      historyToString(channel.qos.history),
+      static_cast<int>(channel.qos.reliability),
+      static_cast<int>(channel.qos.durability),
+      static_cast<int>(channel.qos.history),
       channel.qos.depth);
 }
 
@@ -656,11 +559,11 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
           createChannelEndpoints(channel, idx);
           RCLCPP_INFO(
               this->get_logger(),
-              "Updated QoS for rule %zu: reliability=%s durability=%s history=%s depth=%zu",
+              "Updated QoS for rule %zu: reliability=%d durability=%d history=%d depth=%zu",
               idx,
-              reliabilityToString(channel.qos.reliability),
-              durabilityToString(channel.qos.durability),
-              historyToString(channel.qos.history),
+              static_cast<int>(channel.qos.reliability),
+              static_cast<int>(channel.qos.durability),
+              static_cast<int>(channel.qos.history),
               channel.qos.depth);
         }
         return idx;
@@ -734,11 +637,11 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
       channels_.back().qos.depth);
   RCLCPP_INFO(
       this->get_logger(),
-      "Rule %zu QoS: reliability=%s durability=%s history=%s depth=%zu",
+      "Rule %zu QoS: reliability=%d durability=%d history=%d depth=%zu",
       channel_index,
-      reliabilityToString(channels_.back().qos.reliability),
-      durabilityToString(channels_.back().qos.durability),
-      historyToString(channels_.back().qos.history),
+      static_cast<int>(channels_.back().qos.reliability),
+      static_cast<int>(channels_.back().qos.durability),
+      static_cast<int>(channels_.back().qos.history),
       channels_.back().qos.depth);
   if (added != nullptr) {
     *added = true;
@@ -1227,8 +1130,9 @@ void MiddlewareBridge::announceAutoDiscoveredChannel(const std::uint16_t channel
 
   const std::string payload = "A2|" + std::to_string(channel_id) + "|" + (is_dds2zenoh ? "d2z" : "z2d") + "|" +
                               normalized_transport + "|" + std::to_string(qos.depth) + "|" +
-                              reliabilityToString(qos.reliability) + "|" + durabilityToString(qos.durability) + "|" +
-                              historyToString(qos.history) + "|" + topic_name + "|" + topic_type;
+                              std::to_string(static_cast<int>(qos.reliability)) + "|" +
+                              std::to_string(static_cast<int>(qos.durability)) + "|" +
+                              std::to_string(static_cast<int>(qos.history)) + "|" + topic_name + "|" + topic_type;
   sendUdpPayload(kControlChannelId, reinterpret_cast<const std::uint8_t *>(payload.data()), payload.size());
 }
 
@@ -1251,9 +1155,7 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
     begin = sep + 1U;
   }
 
-  const bool is_v1 = fields.size() == 7U && fields[0] == "A1";
-  const bool is_v2 = fields.size() == 10U && fields[0] == "A2";
-  if (!is_v1 && !is_v2) {
+  if (fields.size() != 10U || fields[0] != "A2") {
     return;
   }
 
@@ -1279,24 +1181,20 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
   }
 
   const std::string & transport = fields[3];
-  const std::string & topic_name = is_v2 ? fields[8] : fields[5];
-  const std::string & topic_type = is_v2 ? fields[9] : fields[6];
+  const std::string & topic_name = fields[8];
+  const std::string & topic_type = fields[9];
   if (topic_name.empty() || topic_type.empty()) {
     return;
   }
 
   auto qos = defaultQosForTopic(topic_name, qos_depth);
   qos.depth = qos_depth;
-  if (is_v2) {
-    const auto reliability = reliabilityFromString(fields[5]);
-    const auto durability = durabilityFromString(fields[6]);
-    const auto history = historyFromString(fields[7]);
-    if (!reliability || !durability || !history) {
-      return;
-    }
-    qos.reliability = *reliability;
-    qos.durability = *durability;
-    qos.history = *history;
+  try {
+    qos.reliability = static_cast<rmw_qos_reliability_policy_t>(std::stoi(fields[5]));
+    qos.durability = static_cast<rmw_qos_durability_policy_t>(std::stoi(fields[6]));
+    qos.history = static_cast<rmw_qos_history_policy_t>(std::stoi(fields[7]));
+  } catch (...) {
+    return;
   }
 
   bool added = false;
