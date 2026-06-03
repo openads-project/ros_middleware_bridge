@@ -19,8 +19,10 @@ target_include_directories(${TARGET_NAME} PUBLIC
 )
 target_compile_features(${TARGET_NAME} PUBLIC c_std_99 cxx_std_17)
 
-target_link_libraries(${TARGET_NAME} PUBLIC rclcpp::rclcpp)
-ament_target_dependencies(${TARGET_NAME} tf2_msgs)
+ament_target_dependencies(${TARGET_NAME}
+  rclcpp
+  tf2_msgs
+)
 
 install(TARGETS ${TARGET_NAME}
   DESTINATION lib/${PROJECT_NAME}
