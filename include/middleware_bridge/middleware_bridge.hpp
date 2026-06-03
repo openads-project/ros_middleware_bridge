@@ -16,6 +16,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialized_message.hpp>
 #include <rmw/types.h>
+#include <tf2_msgs/msg/tf_message.hpp>
 
 namespace middleware_bridge {
 
@@ -51,6 +52,8 @@ class MiddlewareBridge : public rclcpp::Node {
     bool from_auto_discovery = false;
     rclcpp::GenericSubscription::SharedPtr subscriber;
     rclcpp::GenericPublisher::SharedPtr publisher;
+    std::unordered_map<std::string, tf2_msgs::msg::TFMessage::_transforms_type::value_type> tf_static_transforms;
+    std::vector<std::string> tf_static_order;
 
     int shm_fd = -1;
     void * shm_mapping = nullptr;
@@ -110,6 +113,9 @@ class MiddlewareBridge : public rclcpp::Node {
                                      const std::string & transport,
                                      const BridgeQosProfile & qos);
   void handleAutoDiscoveryAnnouncement(const std::uint8_t * payload, std::size_t payload_size);
+  bool aggregateTfStaticMessage(std::size_t channel_index,
+                                rclcpp::SerializedMessage & message,
+                                rclcpp::SerializedMessage & aggregated_message);
   void receiverLoop();
   void shmReceiverLoop();
   void forwardSerializedMessage(std::size_t channel_index, rclcpp::SerializedMessage & message);

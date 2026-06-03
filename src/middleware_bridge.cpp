@@ -19,6 +19,7 @@
 #include <unistd.h>
 
 #include <middleware_bridge/middleware_bridge.hpp>
+#include <rclcpp/serialization.hpp>
 
 namespace middleware_bridge {
 
@@ -1465,10 +1466,59 @@ void MiddlewareBridge::shmReceiverLoop() {
   }
 }
 
+bool MiddlewareBridge::aggregateTfStaticMessage(std::size_t channel_index,
+                                                rclcpp::SerializedMessage & message,
+                                                rclcpp::SerializedMessage & aggregated_message) {
+  tf2_msgs::msg::TFMessage incoming;
+  rclcpp::Serialization<tf2_msgs::msg::TFMessage> serializer;
+  try {
+    serializer.deserialize_message(&message, &incoming);
+  } catch (const std::exception & ex) {
+    RCLCPP_WARN(this->get_logger(), "Dropping /tf_static message that could not be deserialized: %s", ex.what());
+    return false;
+  }
+
+  tf2_msgs::msg::TFMessage aggregate;
+  {
+    std::lock_guard<std::mutex> lock(channels_mutex_);
+    if (channel_index >= channels_.size()) {
+      return false;
+    }
+
+    auto & channel = channels_[channel_index];
+    if (!isTfStaticTopic(channel.subscribe_topic)) {
+      return false;
+    }
+
+    for (const auto & transform : incoming.transforms) {
+      const auto & child_frame_id = transform.child_frame_id;
+      if (child_frame_id.empty()) {
+        continue;
+      }
+      if (channel.tf_static_transforms.find(child_frame_id) == channel.tf_static_transforms.end()) {
+        channel.tf_static_order.push_back(child_frame_id);
+      }
+      channel.tf_static_transforms[child_frame_id] = transform;
+    }
+
+    aggregate.transforms.reserve(channel.tf_static_order.size());
+    for (const auto & child_frame_id : channel.tf_static_order) {
+      const auto it = channel.tf_static_transforms.find(child_frame_id);
+      if (it != channel.tf_static_transforms.end()) {
+        aggregate.transforms.push_back(it->second);
+      }
+    }
+  }
+
+  serializer.serialize_message(&aggregate, &aggregated_message);
+  return true;
+}
+
 void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcpp::SerializedMessage & message) {
   TransportType transport = TransportType::Udp;
   ShmChannelHeader * shm_header = nullptr;
   std::uint8_t * shm_payload = nullptr;
+  bool aggregate_tf_static = false;
 
   {
     std::lock_guard<std::mutex> lock(channels_mutex_);
@@ -1478,9 +1528,19 @@ void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcp
     transport = channels_[channel_index].transport;
     shm_header = channels_[channel_index].shm_header;
     shm_payload = channels_[channel_index].shm_payload;
+    aggregate_tf_static = isTfStaticTopic(channels_[channel_index].subscribe_topic);
   }
 
-  const auto & rcl_serialized = message.get_rcl_serialized_message();
+  rclcpp::SerializedMessage aggregated_message;
+  auto * outgoing_message = &message;
+  if (aggregate_tf_static) {
+    if (!aggregateTfStaticMessage(channel_index, message, aggregated_message)) {
+      return;
+    }
+    outgoing_message = &aggregated_message;
+  }
+
+  const auto & rcl_serialized = outgoing_message->get_rcl_serialized_message();
   const std::size_t payload_size = rcl_serialized.buffer_length;
   if (payload_size > static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
     RCLCPP_WARN(this->get_logger(), "Dropping oversized serialized message (%zu bytes).", payload_size);
