@@ -15,6 +15,8 @@
 #include <rclcpp/generic_subscription.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialized_message.hpp>
+#include <rmw/types.h>
+#include <tf2_msgs/msg/tf_message.hpp>
 
 namespace middleware_bridge {
 
@@ -33,15 +35,25 @@ class MiddlewareBridge : public rclcpp::Node {
 
   struct ShmChannelHeader;
 
+  struct BridgeQosProfile {
+    std::size_t depth = 10;
+    rmw_qos_history_policy_t history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
+    rmw_qos_reliability_policy_t reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
+    rmw_qos_durability_policy_t durability = RMW_QOS_POLICY_DURABILITY_VOLATILE;
+  };
+
   struct BridgeChannel {
     std::string subscribe_topic;
     std::string publish_topic;
     std::string topic_type;
     TransportType transport = TransportType::Udp;
     std::string transport_name = "udp";
-    std::size_t qos_depth = 10;
+    BridgeQosProfile qos;
+    bool from_auto_discovery = false;
     rclcpp::GenericSubscription::SharedPtr subscriber;
     rclcpp::GenericPublisher::SharedPtr publisher;
+    std::unordered_map<std::string, tf2_msgs::msg::TFMessage::_transforms_type::value_type> tf_static_transforms;
+    std::vector<std::string> tf_static_order;
 
     int shm_fd = -1;
     void * shm_mapping = nullptr;
@@ -78,21 +90,32 @@ class MiddlewareBridge : public rclcpp::Node {
   void setupSharedMemoryChannels();
   void setupSharedMemoryChannel(BridgeChannel & channel, const std::string & ns, std::size_t channel_index);
   void runAutoDiscoveryScan();
+  void refreshLocalSourceQos();
+  void announceStaticSourceChannels();
   std::size_t addChannelIfMissing(bool is_dds2zenoh,
                                   const std::string & topic_name,
                                   const std::string & topic_type,
                                   const std::string & transport,
-                                  std::size_t qos_depth,
+                                  const BridgeQosProfile & qos,
                                   bool from_auto_discovery,
                                   bool * added = nullptr);
+  BridgeQosProfile defaultQosForTopic(const std::string & topic_name, std::size_t fallback_depth) const;
+  BridgeQosProfile resolveSourceQos(const std::string & topic_name, std::size_t fallback_depth) const;
+  static bool qosProfilesEqual(const BridgeQosProfile & lhs, const BridgeQosProfile & rhs);
+  rclcpp::QoS makeRclcppQos(const BridgeQosProfile & qos) const;
+  void createChannelEndpoints(BridgeChannel & channel, std::size_t channel_index);
+  void updateChannelQos(std::size_t channel_index, const BridgeQosProfile & qos, const char * reason);
   void sendUdpPayload(std::uint16_t channel_id, const std::uint8_t * payload, std::size_t payload_size);
   void announceAutoDiscoveredChannel(std::uint16_t channel_id,
                                      bool is_dds2zenoh,
                                      const std::string & topic_name,
                                      const std::string & topic_type,
                                      const std::string & transport,
-                                     std::size_t qos_depth);
+                                     const BridgeQosProfile & qos);
   void handleAutoDiscoveryAnnouncement(const std::uint8_t * payload, std::size_t payload_size);
+  bool aggregateTfStaticMessage(std::size_t channel_index,
+                                rclcpp::SerializedMessage & message,
+                                rclcpp::SerializedMessage & aggregated_message);
   void receiverLoop();
   void shmReceiverLoop();
   void forwardSerializedMessage(std::size_t channel_index, rclcpp::SerializedMessage & message);

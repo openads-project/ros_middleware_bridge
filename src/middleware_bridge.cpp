@@ -19,8 +19,21 @@
 #include <unistd.h>
 
 #include <middleware_bridge/middleware_bridge.hpp>
+#include <rclcpp/serialization.hpp>
 
 namespace middleware_bridge {
+
+namespace {
+
+bool isTfStaticTopic(const std::string & topic_name) {
+  constexpr const char * suffix = "/tf_static";
+  constexpr std::size_t suffix_length = 10U;
+  return topic_name == "tf_static" ||
+         (topic_name.size() >= suffix_length &&
+          topic_name.compare(topic_name.size() - suffix_length, suffix_length, suffix) == 0);
+}
+
+}  // namespace
 
 MiddlewareBridge::MiddlewareBridge() : Node("middleware_bridge") {
   try {
@@ -34,6 +47,10 @@ MiddlewareBridge::MiddlewareBridge() : Node("middleware_bridge") {
     if (auto_discovery_enabled_ && auto_discovery_wait_ms_ > 0) {
       RCLCPP_INFO(this->get_logger(), "Waiting %d ms before initial auto-discovery scan.", auto_discovery_wait_ms_);
       std::this_thread::sleep_for(std::chrono::milliseconds(auto_discovery_wait_ms_));
+    }
+    refreshLocalSourceQos();
+    if (use_udp_transport_) {
+      announceStaticSourceChannels();
     }
     if (auto_discovery_enabled_) {
       runAutoDiscoveryScan();
@@ -51,10 +68,16 @@ MiddlewareBridge::MiddlewareBridge() : Node("middleware_bridge") {
       shm_receiver_thread_ = std::thread(&MiddlewareBridge::shmReceiverLoop, this);
     }
 
-    if (auto_discovery_enabled_ && auto_discovery_poll_ms_ > 0) {
+    if ((auto_discovery_enabled_ || use_udp_transport_) && auto_discovery_poll_ms_ > 0) {
       auto_discovery_timer_ = this->create_wall_timer(
           std::chrono::milliseconds(auto_discovery_poll_ms_),
-          [this]() { this->runAutoDiscoveryScan(); });
+          [this]() {
+            this->refreshLocalSourceQos();
+            if (this->use_udp_transport_) {
+              this->announceStaticSourceChannels();
+            }
+            this->runAutoDiscoveryScan();
+          });
     }
   } catch (...) {
     stopBackgroundThreads();
@@ -322,11 +345,181 @@ void MiddlewareBridge::declareAndLoadParameters() {
       zenoh2dds_auto_discovery_ ? "true" : "false");
 }
 
+MiddlewareBridge::BridgeQosProfile MiddlewareBridge::defaultQosForTopic(const std::string & topic_name,
+                                                                         const std::size_t fallback_depth) const {
+  BridgeQosProfile qos;
+  qos.depth = std::max<std::size_t>(1U, fallback_depth);
+  qos.history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
+  qos.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
+  qos.durability =
+      isTfStaticTopic(topic_name) ? RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL : RMW_QOS_POLICY_DURABILITY_VOLATILE;
+  return qos;
+}
+
+MiddlewareBridge::BridgeQosProfile MiddlewareBridge::resolveSourceQos(const std::string & topic_name,
+                                                                      const std::size_t fallback_depth) const {
+  auto resolved = defaultQosForTopic(topic_name, fallback_depth);
+  const auto endpoints = this->get_publishers_info_by_topic(topic_name);
+  if (endpoints.empty()) {
+    return resolved;
+  }
+
+  bool saw_best_effort = false;
+  bool saw_reliable = false;
+  bool saw_transient_local = false;
+  bool saw_volatile = false;
+  bool saw_keep_all = false;
+  bool saw_keep_last = false;
+  std::size_t max_depth = resolved.depth;
+
+  for (const auto & info : endpoints) {
+    rclcpp::QoS endpoint_qos(0);
+    endpoint_qos = info.qos_profile();
+    const auto & rmw_qos = endpoint_qos.get_rmw_qos_profile();
+
+    if (rmw_qos.depth > 0U) {
+      max_depth = std::max<std::size_t>(max_depth, static_cast<std::size_t>(rmw_qos.depth));
+    }
+
+    switch (rmw_qos.reliability) {
+      case RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT:
+        saw_best_effort = true;
+        break;
+      case RMW_QOS_POLICY_RELIABILITY_RELIABLE:
+        saw_reliable = true;
+        break;
+      default:
+        break;
+    }
+
+    switch (rmw_qos.durability) {
+      case RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL:
+        saw_transient_local = true;
+        break;
+      case RMW_QOS_POLICY_DURABILITY_VOLATILE:
+        saw_volatile = true;
+        break;
+      default:
+        break;
+    }
+
+    switch (rmw_qos.history) {
+      case RMW_QOS_POLICY_HISTORY_KEEP_ALL:
+        saw_keep_all = true;
+        break;
+      case RMW_QOS_POLICY_HISTORY_KEEP_LAST:
+        saw_keep_last = true;
+        break;
+      default:
+        break;
+    }
+  }
+
+  resolved.depth = max_depth;
+  if (saw_best_effort) {
+    resolved.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
+  } else if (saw_reliable) {
+    resolved.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
+  }
+
+  if (saw_transient_local && (!saw_volatile || isTfStaticTopic(topic_name))) {
+    resolved.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
+  } else if (saw_volatile) {
+    resolved.durability = RMW_QOS_POLICY_DURABILITY_VOLATILE;
+  }
+
+  if (saw_keep_all) {
+    resolved.history = RMW_QOS_POLICY_HISTORY_KEEP_ALL;
+  } else if (saw_keep_last) {
+    resolved.history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
+  }
+
+  if (saw_best_effort && saw_reliable) {
+    RCLCPP_WARN(
+        this->get_logger(),
+        "Topic '%s' has mixed publisher reliability. Using best_effort so the bridge subscription remains compatible.",
+        topic_name.c_str());
+  }
+  if (saw_transient_local && saw_volatile) {
+    RCLCPP_WARN(
+        this->get_logger(),
+        "Topic '%s' has mixed publisher durability. Using durability policy %d.",
+        topic_name.c_str(),
+        static_cast<int>(resolved.durability));
+  }
+
+  return resolved;
+}
+
+bool MiddlewareBridge::qosProfilesEqual(const BridgeQosProfile & lhs, const BridgeQosProfile & rhs) {
+  return lhs.depth == rhs.depth && lhs.history == rhs.history && lhs.reliability == rhs.reliability &&
+         lhs.durability == rhs.durability;
+}
+
+rclcpp::QoS MiddlewareBridge::makeRclcppQos(const BridgeQosProfile & qos) const {
+  rclcpp::QoS rclcpp_qos(rclcpp::KeepLast(qos.depth));
+  auto & rmw_qos = rclcpp_qos.get_rmw_qos_profile();
+  rmw_qos.depth = qos.depth;
+  rmw_qos.history = qos.history;
+  rmw_qos.reliability = qos.reliability;
+  rmw_qos.durability = qos.durability;
+  return rclcpp_qos;
+}
+
+void MiddlewareBridge::createChannelEndpoints(BridgeChannel & channel, const std::size_t channel_index) {
+  if (!channel.publish_topic.empty()) {
+    auto publisher_qos = channel.qos;
+    if (isTfStaticTopic(channel.publish_topic)) {
+      publisher_qos.depth = 1U;
+      publisher_qos.history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
+      publisher_qos.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
+      publisher_qos.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
+    }
+    channel.publisher = this->create_generic_publisher(channel.publish_topic, channel.topic_type, makeRclcppQos(publisher_qos));
+  }
+  if (!channel.subscribe_topic.empty()) {
+    channel.subscriber = this->create_generic_subscription(
+        channel.subscribe_topic,
+        channel.topic_type,
+        makeRclcppQos(channel.qos),
+        [this, channel_index](std::shared_ptr<rclcpp::SerializedMessage> msg) {
+          if (msg != nullptr) {
+            this->forwardSerializedMessage(channel_index, *msg);
+          }
+        });
+  }
+}
+
+void MiddlewareBridge::updateChannelQos(const std::size_t channel_index,
+                                        const BridgeQosProfile & qos,
+                                        const char * reason) {
+  std::lock_guard<std::mutex> lock(channels_mutex_);
+  if (channel_index >= channels_.size() || qosProfilesEqual(channels_[channel_index].qos, qos)) {
+    return;
+  }
+
+  auto & channel = channels_[channel_index];
+  channel.publisher.reset();
+  channel.subscriber.reset();
+  channel.qos = qos;
+  createChannelEndpoints(channel, channel_index);
+
+  RCLCPP_INFO(
+      this->get_logger(),
+      "Updated QoS for rule %zu from %s: reliability=%d durability=%d history=%d depth=%zu",
+      channel_index,
+      reason,
+      static_cast<int>(channel.qos.reliability),
+      static_cast<int>(channel.qos.durability),
+      static_cast<int>(channel.qos.history),
+      channel.qos.depth);
+}
+
 std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
                                                   const std::string & topic_name,
                                                   const std::string & topic_type,
                                                   const std::string & transport,
-                                                  const std::size_t qos_depth,
+                                                  const BridgeQosProfile & qos,
                                                   const bool from_auto_discovery,
                                                   bool * added) {
   auto canonical_transport = [](std::string value) -> std::string {
@@ -356,10 +549,24 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
       *added = false;
     }
     for (std::size_t idx = 0; idx < channels_.size(); ++idx) {
-      const auto & channel = channels_[idx];
+      auto & channel = channels_[idx];
       if (channel.topic_type == topic_type &&
           channel.subscribe_topic == subscribe_topic &&
           channel.publish_topic == publish_topic) {
+        if (!qosProfilesEqual(channel.qos, qos)) {
+          channel.publisher.reset();
+          channel.subscriber.reset();
+          channel.qos = qos;
+          createChannelEndpoints(channel, idx);
+          RCLCPP_INFO(
+              this->get_logger(),
+              "Updated QoS for rule %zu: reliability=%d durability=%d history=%d depth=%zu",
+              idx,
+              static_cast<int>(channel.qos.reliability),
+              static_cast<int>(channel.qos.durability),
+              static_cast<int>(channel.qos.history),
+              channel.qos.depth);
+        }
         return idx;
       }
     }
@@ -374,7 +581,8 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
   channel.subscribe_topic = subscribe_topic;
   channel.publish_topic = publish_topic;
   channel.topic_type = topic_type;
-  channel.qos_depth = qos_depth;
+  channel.qos = qos;
+  channel.from_auto_discovery = from_auto_discovery;
   if (canonical == "udp") {
     channel.transport = TransportType::Udp;
     channel.transport_name = "udp";
@@ -386,21 +594,7 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
   }
 
   const std::size_t channel_index = channels_.size();
-  const auto qos = rclcpp::QoS(rclcpp::KeepLast(channel.qos_depth));
-  if (!channel.publish_topic.empty()) {
-    channel.publisher = this->create_generic_publisher(channel.publish_topic, channel.topic_type, qos);
-  }
-  if (!channel.subscribe_topic.empty()) {
-    channel.subscriber = this->create_generic_subscription(
-        channel.subscribe_topic,
-        channel.topic_type,
-        qos,
-        [this, channel_index](std::shared_ptr<rclcpp::SerializedMessage> msg) {
-          if (msg != nullptr) {
-            this->forwardSerializedMessage(channel_index, *msg);
-          }
-        });
-  }
+  createChannelEndpoints(channel, channel_index);
 
   channels_.push_back(std::move(channel));
   channel_keys_.insert(channel_key);
@@ -441,7 +635,15 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
       channels_.back().subscribe_topic.c_str(),
       channels_.back().publish_topic.c_str(),
       channels_.back().topic_type.c_str(),
-      channels_.back().qos_depth);
+      channels_.back().qos.depth);
+  RCLCPP_INFO(
+      this->get_logger(),
+      "Rule %zu QoS: reliability=%d durability=%d history=%d depth=%zu",
+      channel_index,
+      static_cast<int>(channels_.back().qos.reliability),
+      static_cast<int>(channels_.back().qos.durability),
+      static_cast<int>(channels_.back().qos.history),
+      channels_.back().qos.depth);
   if (added != nullptr) {
     *added = true;
   }
@@ -468,21 +670,27 @@ void MiddlewareBridge::setupBridgeChannels() {
   };
 
   for (std::size_t idx = 0; idx < dds2zenoh_topics_.size(); ++idx) {
+    const auto fallback_depth = qosDepthForRule(dds2zenoh_qos_depths_, idx);
+    const auto qos = bridge_role_ == "dds" ? resolveSourceQos(dds2zenoh_topics_[idx], fallback_depth)
+                                           : defaultQosForTopic(dds2zenoh_topics_[idx], fallback_depth);
     (void)addChannelIfMissing(
         true,
         dds2zenoh_topics_[idx],
         dds2zenoh_topic_types_[idx],
         transportForRule(dds2zenoh_transports_, idx),
-        qosDepthForRule(dds2zenoh_qos_depths_, idx),
+        qos,
         false);
   }
   for (std::size_t idx = 0; idx < zenoh2dds_topics_.size(); ++idx) {
+    const auto fallback_depth = qosDepthForRule(zenoh2dds_qos_depths_, idx);
+    const auto qos = bridge_role_ == "zenoh" ? resolveSourceQos(zenoh2dds_topics_[idx], fallback_depth)
+                                             : defaultQosForTopic(zenoh2dds_topics_[idx], fallback_depth);
     (void)addChannelIfMissing(
         false,
         zenoh2dds_topics_[idx],
         zenoh2dds_topic_types_[idx],
         transportForRule(zenoh2dds_transports_, idx),
-        qosDepthForRule(zenoh2dds_qos_depths_, idx),
+        qos,
         false);
   }
 
@@ -527,7 +735,7 @@ void MiddlewareBridge::setupBridgeChannels() {
     use_shm_transport_ = use_shm_transport_ || mayUseShm(zenoh2dds_transports_);
   }
 
-  if (auto_discovery_enabled_) {
+  if (auto_discovery_enabled_ || !channels_.empty()) {
     use_udp_transport_ = true;
   }
 }
@@ -673,6 +881,72 @@ void MiddlewareBridge::setupSharedMemoryChannels() {
   }
 }
 
+void MiddlewareBridge::refreshLocalSourceQos() {
+  struct SourceChannel {
+    std::size_t channel_index;
+    std::string topic_name;
+    std::size_t fallback_depth;
+  };
+
+  std::vector<SourceChannel> source_channels;
+  {
+    std::lock_guard<std::mutex> lock(channels_mutex_);
+    source_channels.reserve(channels_.size());
+    for (std::size_t channel_index = 0; channel_index < channels_.size(); ++channel_index) {
+      const auto & channel = channels_[channel_index];
+      if (!channel.subscribe_topic.empty()) {
+        source_channels.push_back(SourceChannel{channel_index, channel.subscribe_topic, channel.qos.depth});
+      }
+    }
+  }
+
+  for (const auto & channel : source_channels) {
+    const auto qos = resolveSourceQos(channel.topic_name, channel.fallback_depth);
+    updateChannelQos(channel.channel_index, qos, "source publisher graph");
+  }
+}
+
+void MiddlewareBridge::announceStaticSourceChannels() {
+  struct StaticSourceChannel {
+    std::uint16_t channel_id;
+    bool is_dds2zenoh;
+    std::string topic_name;
+    std::string topic_type;
+    std::string transport;
+    BridgeQosProfile qos;
+  };
+
+  std::vector<StaticSourceChannel> static_source_channels;
+  {
+    std::lock_guard<std::mutex> lock(channels_mutex_);
+    static_source_channels.reserve(channels_.size());
+    for (std::size_t channel_index = 0; channel_index < channels_.size(); ++channel_index) {
+      const auto & channel = channels_[channel_index];
+      if (channel.from_auto_discovery || channel.subscribe_topic.empty() ||
+          channel_index >= static_cast<std::size_t>(kControlChannelId)) {
+        continue;
+      }
+      static_source_channels.push_back(StaticSourceChannel{
+          static_cast<std::uint16_t>(channel_index),
+          bridge_role_ == "dds",
+          channel.subscribe_topic,
+          channel.topic_type,
+          channel.transport_name,
+          channel.qos});
+    }
+  }
+
+  for (const auto & channel : static_source_channels) {
+    announceAutoDiscoveredChannel(
+        channel.channel_id,
+        channel.is_dds2zenoh,
+        channel.topic_name,
+        channel.topic_type,
+        channel.transport,
+        channel.qos);
+  }
+}
+
 void MiddlewareBridge::runAutoDiscoveryScan() {
   if (!auto_discovery_enabled_) {
     return;
@@ -714,7 +988,7 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
       std::sort(matched_topics.begin(), matched_topics.end());
 
       const auto transport = transportForRule(transports, rule_index);
-      const auto qos_depth = qosDepthForRule(qos_depths, rule_index);
+      const auto fallback_depth = qosDepthForRule(qos_depths, rule_index);
       for (const auto & topic_name : matched_topics) {
         if (!seen_topics_this_scan.insert(topic_name).second) {
           RCLCPP_WARN(
@@ -724,15 +998,23 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
               direction_name.c_str());
           continue;
         }
+        const auto qos = resolveSourceQos(topic_name, fallback_depth);
         bool added = false;
-        const auto channel_index = addChannelIfMissing(is_dds2zenoh, topic_name, type_name, transport, qos_depth, true, &added);
+        const auto channel_index = addChannelIfMissing(
+            is_dds2zenoh,
+            topic_name,
+            type_name,
+            transport,
+            qos,
+            true,
+            &added);
         announceAutoDiscoveredChannel(
             static_cast<std::uint16_t>(channel_index),
             is_dds2zenoh,
             topic_name,
             type_name,
             transport,
-            qos_depth);
+            qos);
         if (added) {
           added_count += 1U;
         }
@@ -832,7 +1114,7 @@ void MiddlewareBridge::announceAutoDiscoveredChannel(const std::uint16_t channel
                                                      const std::string & topic_name,
                                                      const std::string & topic_type,
                                                      const std::string & transport,
-                                                     const std::size_t qos_depth) {
+                                                     const BridgeQosProfile & qos) {
   if (tx_socket_fd_ < 0) {
     return;
   }
@@ -847,8 +1129,11 @@ void MiddlewareBridge::announceAutoDiscoveredChannel(const std::uint16_t channel
     normalized_transport = "shm";
   }
 
-  const std::string payload = "A1|" + std::to_string(channel_id) + "|" + (is_dds2zenoh ? "d2z" : "z2d") + "|" +
-                              normalized_transport + "|" + std::to_string(qos_depth) + "|" + topic_name + "|" + topic_type;
+  const std::string payload = "A2|" + std::to_string(channel_id) + "|" + (is_dds2zenoh ? "d2z" : "z2d") + "|" +
+                              normalized_transport + "|" + std::to_string(qos.depth) + "|" +
+                              std::to_string(static_cast<int>(qos.reliability)) + "|" +
+                              std::to_string(static_cast<int>(qos.durability)) + "|" +
+                              std::to_string(static_cast<int>(qos.history)) + "|" + topic_name + "|" + topic_type;
   sendUdpPayload(kControlChannelId, reinterpret_cast<const std::uint8_t *>(payload.data()), payload.size());
 }
 
@@ -859,7 +1144,7 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
 
   const std::string message(reinterpret_cast<const char *>(payload), payload_size);
   std::vector<std::string> fields;
-  fields.reserve(8);
+  fields.reserve(10);
   std::size_t begin = 0U;
   while (begin <= message.size()) {
     const auto sep = message.find('|', begin);
@@ -871,7 +1156,7 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
     begin = sep + 1U;
   }
 
-  if (fields.size() != 7U || fields[0] != "A1") {
+  if (fields.size() != 10U || fields[0] != "A2") {
     return;
   }
 
@@ -897,14 +1182,31 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
   }
 
   const std::string & transport = fields[3];
-  const std::string & topic_name = fields[5];
-  const std::string & topic_type = fields[6];
+  const std::string & topic_name = fields[8];
+  const std::string & topic_type = fields[9];
   if (topic_name.empty() || topic_type.empty()) {
     return;
   }
 
+  auto qos = defaultQosForTopic(topic_name, qos_depth);
+  qos.depth = qos_depth;
+  try {
+    qos.reliability = static_cast<rmw_qos_reliability_policy_t>(std::stoi(fields[5]));
+    qos.durability = static_cast<rmw_qos_durability_policy_t>(std::stoi(fields[6]));
+    qos.history = static_cast<rmw_qos_history_policy_t>(std::stoi(fields[7]));
+  } catch (...) {
+    return;
+  }
+
   bool added = false;
-  const auto local_channel_index = addChannelIfMissing(is_dds2zenoh, topic_name, topic_type, transport, qos_depth, true, &added);
+  const auto local_channel_index = addChannelIfMissing(
+      is_dds2zenoh,
+      topic_name,
+      topic_type,
+      transport,
+      qos,
+      true,
+      &added);
   {
     std::lock_guard<std::mutex> lock(channels_mutex_);
     remote_channel_to_local_index_[remote_channel_index] = local_channel_index;
@@ -1164,10 +1466,59 @@ void MiddlewareBridge::shmReceiverLoop() {
   }
 }
 
+bool MiddlewareBridge::aggregateTfStaticMessage(std::size_t channel_index,
+                                                rclcpp::SerializedMessage & message,
+                                                rclcpp::SerializedMessage & aggregated_message) {
+  tf2_msgs::msg::TFMessage incoming;
+  rclcpp::Serialization<tf2_msgs::msg::TFMessage> serializer;
+  try {
+    serializer.deserialize_message(&message, &incoming);
+  } catch (const std::exception & ex) {
+    RCLCPP_WARN(this->get_logger(), "Dropping /tf_static message that could not be deserialized: %s", ex.what());
+    return false;
+  }
+
+  tf2_msgs::msg::TFMessage aggregate;
+  {
+    std::lock_guard<std::mutex> lock(channels_mutex_);
+    if (channel_index >= channels_.size()) {
+      return false;
+    }
+
+    auto & channel = channels_[channel_index];
+    if (!isTfStaticTopic(channel.subscribe_topic)) {
+      return false;
+    }
+
+    for (const auto & transform : incoming.transforms) {
+      const auto & child_frame_id = transform.child_frame_id;
+      if (child_frame_id.empty()) {
+        continue;
+      }
+      if (channel.tf_static_transforms.find(child_frame_id) == channel.tf_static_transforms.end()) {
+        channel.tf_static_order.push_back(child_frame_id);
+      }
+      channel.tf_static_transforms[child_frame_id] = transform;
+    }
+
+    aggregate.transforms.reserve(channel.tf_static_order.size());
+    for (const auto & child_frame_id : channel.tf_static_order) {
+      const auto it = channel.tf_static_transforms.find(child_frame_id);
+      if (it != channel.tf_static_transforms.end()) {
+        aggregate.transforms.push_back(it->second);
+      }
+    }
+  }
+
+  serializer.serialize_message(&aggregate, &aggregated_message);
+  return true;
+}
+
 void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcpp::SerializedMessage & message) {
   TransportType transport = TransportType::Udp;
   ShmChannelHeader * shm_header = nullptr;
   std::uint8_t * shm_payload = nullptr;
+  bool aggregate_tf_static = false;
 
   {
     std::lock_guard<std::mutex> lock(channels_mutex_);
@@ -1177,9 +1528,19 @@ void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcp
     transport = channels_[channel_index].transport;
     shm_header = channels_[channel_index].shm_header;
     shm_payload = channels_[channel_index].shm_payload;
+    aggregate_tf_static = isTfStaticTopic(channels_[channel_index].subscribe_topic);
   }
 
-  const auto & rcl_serialized = message.get_rcl_serialized_message();
+  rclcpp::SerializedMessage aggregated_message;
+  auto * outgoing_message = &message;
+  if (aggregate_tf_static) {
+    if (!aggregateTfStaticMessage(channel_index, message, aggregated_message)) {
+      return;
+    }
+    outgoing_message = &aggregated_message;
+  }
+
+  const auto & rcl_serialized = outgoing_message->get_rcl_serialized_message();
   const std::size_t payload_size = rcl_serialized.buffer_length;
   if (payload_size > static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
     RCLCPP_WARN(this->get_logger(), "Dropping oversized serialized message (%zu bytes).", payload_size);
