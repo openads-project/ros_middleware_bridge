@@ -92,7 +92,7 @@ class MiddlewareBridge : public rclcpp::Node {
   void runAutoDiscoveryScan();
   void refreshLocalSourceQos();
   void announceStaticSourceChannels();
-  std::size_t addChannelIfMissing(bool is_dds2zenoh,
+  std::size_t addChannelIfMissing(bool is_side_a_to_b,
                                   const std::string & topic_name,
                                   const std::string & topic_type,
                                   const std::string & transport,
@@ -107,7 +107,7 @@ class MiddlewareBridge : public rclcpp::Node {
   void updateChannelQos(std::size_t channel_index, const BridgeQosProfile & qos, const char * reason);
   void sendUdpPayload(std::uint16_t channel_id, const std::uint8_t * payload, std::size_t payload_size);
   void announceAutoDiscoveredChannel(std::uint16_t channel_id,
-                                     bool is_dds2zenoh,
+                                     bool is_side_a_to_b,
                                      const std::string & topic_name,
                                      const std::string & topic_type,
                                      const std::string & transport,
@@ -124,7 +124,7 @@ class MiddlewareBridge : public rclcpp::Node {
 
   std::string remote_host_ = "127.0.0.1";
   std::string shm_namespace_ = "middleware_bridge";
-  std::string bridge_role_ = "dds";
+  std::string bridge_side_ = "a";
   int tx_port_ = 17001;
   int rx_port_ = 17002;
   int socket_buffer_bytes_ = 1024 * 1024;
@@ -134,16 +134,16 @@ class MiddlewareBridge : public rclcpp::Node {
   int reassembly_timeout_ms_ = 1000;
   int auto_discovery_wait_ms_ = 0;
   int auto_discovery_poll_ms_ = 1000;
-  std::vector<std::string> dds2zenoh_topics_;
-  std::vector<std::string> dds2zenoh_topic_types_;
-  std::vector<std::string> dds2zenoh_transports_;
-  std::vector<int64_t> dds2zenoh_qos_depths_;
-  std::vector<std::string> zenoh2dds_topics_;
-  std::vector<std::string> zenoh2dds_topic_types_;
-  std::vector<std::string> zenoh2dds_transports_;
-  std::vector<int64_t> zenoh2dds_qos_depths_;
-  bool dds2zenoh_auto_discovery_ = false;
-  bool zenoh2dds_auto_discovery_ = false;
+  std::vector<std::string> side_a2b_topics_;
+  std::vector<std::string> side_a2b_topic_types_;
+  std::vector<std::string> side_a2b_transports_;
+  std::vector<int64_t> side_a2b_qos_depths_;
+  std::vector<std::string> side_b2a_topics_;
+  std::vector<std::string> side_b2a_topic_types_;
+  std::vector<std::string> side_b2a_transports_;
+  std::vector<int64_t> side_b2a_qos_depths_;
+  bool side_a2b_auto_discovery_ = false;
+  bool side_b2a_auto_discovery_ = false;
   bool auto_discovery_enabled_ = false;
   std::unordered_set<std::string> channel_keys_;
   std::unordered_map<std::uint16_t, std::size_t> remote_channel_to_local_index_;

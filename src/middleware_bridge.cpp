@@ -111,7 +111,7 @@ void MiddlewareBridge::declareAndLoadParameters() {
   };
 
   num_threads_ = this->declare_parameter<int>("num_threads", 1);
-  bridge_role_ = this->declare_parameter<std::string>("bridge_role", "dds");
+  const auto bridge_side_param = this->declare_parameter<std::string>("bridge_side", "a");
   remote_host_ = this->declare_parameter<std::string>("remote_host", "127.0.0.1");
   shm_namespace_ = this->declare_parameter<std::string>("shm_namespace", "middleware_bridge");
   tx_port_ = this->declare_parameter<int>("tx_port", 17001);
@@ -124,17 +124,54 @@ void MiddlewareBridge::declareAndLoadParameters() {
   auto_discovery_wait_ms_ = this->declare_parameter<int>("auto_discovery_wait_ms", 0);
   auto_discovery_poll_ms_ = this->declare_parameter<int>("auto_discovery_poll_ms", 1000);
 
-  dds2zenoh_topics_ = declare_string_array_parameter(
-      "dds2zenoh.topics", std::vector<std::string>{"/bridge/dds2zenoh/example"}, true);
-  dds2zenoh_topic_types_ = declare_string_array_parameter(
-      "dds2zenoh.topic_types", std::vector<std::string>{"geometry_msgs/msg/PointStamped"}, false);
-  dds2zenoh_transports_ = declare_string_array_parameter("dds2zenoh.transports", std::vector<std::string>{}, false);
-  dds2zenoh_qos_depths_ = this->declare_parameter<std::vector<int64_t>>("dds2zenoh.qos_depths", std::vector<int64_t>{10});
+  auto canonical_bridge_side = [](std::string value, const std::string & parameter_name) -> std::string {
+    std::transform(
+        value.begin(),
+        value.end(),
+        value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::replace(value.begin(), value.end(), '-', '_');
 
-  zenoh2dds_topics_ = declare_string_array_parameter("zenoh2dds.topics", std::vector<std::string>{}, true);
-  zenoh2dds_topic_types_ = declare_string_array_parameter("zenoh2dds.topic_types", std::vector<std::string>{}, false);
-  zenoh2dds_transports_ = declare_string_array_parameter("zenoh2dds.transports", std::vector<std::string>{}, false);
-  zenoh2dds_qos_depths_ = this->declare_parameter<std::vector<int64_t>>("zenoh2dds.qos_depths", std::vector<int64_t>{});
+    if (value == "a" || value == "side_a" || value == "sidea") {
+      return "a";
+    }
+    if (value == "b" || value == "side_b" || value == "sideb") {
+      return "b";
+    }
+
+    throw std::runtime_error(
+        "Parameter '" + parameter_name + "' must resolve to side A or side B (e.g. a, side_a, b, side_b)."
+    );
+  };
+
+  bridge_side_ = canonical_bridge_side(bridge_side_param, "bridge_side");
+
+  struct DirectionParameters {
+    std::vector<std::string> topics;
+    std::vector<std::string> topic_types;
+    std::vector<std::string> transports;
+    std::vector<int64_t> qos_depths;
+  };
+
+  const DirectionParameters side_a2b_config{
+      declare_string_array_parameter("side_a2b.topics", std::vector<std::string>{}, true),
+      declare_string_array_parameter("side_a2b.topic_types", std::vector<std::string>{}, false),
+      declare_string_array_parameter("side_a2b.transports", std::vector<std::string>{}, false),
+      this->declare_parameter<std::vector<int64_t>>("side_a2b.qos_depths", std::vector<int64_t>{})};
+  const DirectionParameters side_b2a_config{
+      declare_string_array_parameter("side_b2a.topics", std::vector<std::string>{}, true),
+      declare_string_array_parameter("side_b2a.topic_types", std::vector<std::string>{}, false),
+      declare_string_array_parameter("side_b2a.transports", std::vector<std::string>{}, false),
+      this->declare_parameter<std::vector<int64_t>>("side_b2a.qos_depths", std::vector<int64_t>{})};
+
+  side_a2b_topics_ = side_a2b_config.topics;
+  side_a2b_topic_types_ = side_a2b_config.topic_types;
+  side_a2b_transports_ = side_a2b_config.transports;
+  side_a2b_qos_depths_ = side_a2b_config.qos_depths;
+  side_b2a_topics_ = side_b2a_config.topics;
+  side_b2a_topic_types_ = side_b2a_config.topic_types;
+  side_b2a_transports_ = side_b2a_config.transports;
+  side_b2a_qos_depths_ = side_b2a_config.qos_depths;
 
   auto normalize_auto_discovery_topics = [](std::vector<std::string> & topics) {
     if (topics.size() != 1U) {
@@ -150,28 +187,8 @@ void MiddlewareBridge::declareAndLoadParameters() {
       topics.clear();
     }
   };
-  normalize_auto_discovery_topics(dds2zenoh_topics_);
-  normalize_auto_discovery_topics(zenoh2dds_topics_);
-
-  std::transform(
-      bridge_role_.begin(),
-      bridge_role_.end(),
-      bridge_role_.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (bridge_role_ == "fast" || bridge_role_ == "fastrtps" || bridge_role_ == "fastrtps_cpp" ||
-      bridge_role_ == "rmw_fastrtps_cpp" || bridge_role_ == "rmw_fast_rtps" || bridge_role_ == "rmw_fastdds_cpp") {
-    bridge_role_ = "dds";
-  }
-  if (bridge_role_ == "zenoh_cpp" || bridge_role_ == "rmw_zenoh_cpp" || bridge_role_ == "rmw_zenoh_c" ||
-      bridge_role_ == "zenoh") {
-    bridge_role_ = "zenoh";
-  }
-  if (bridge_role_ != "dds" && bridge_role_ != "zenoh") {
-    throw std::runtime_error(
-        "Parameter 'bridge_role' must resolve to 'dds' or 'zenoh' (e.g. dds, fast, fastrtps_cpp, rmw_fastrtps_cpp, "
-        "zenoh, zenoh_cpp, rmw_zenoh_cpp)."
-    );
-  }
+  normalize_auto_discovery_topics(side_a2b_topics_);
+  normalize_auto_discovery_topics(side_b2a_topics_);
 
   if (auto_discovery_wait_ms_ < 0) {
     throw std::runtime_error("Parameter 'auto_discovery_wait_ms' must be greater than or equal to zero.");
@@ -277,28 +294,28 @@ void MiddlewareBridge::declareAndLoadParameters() {
     }
   };
 
-  dds2zenoh_auto_discovery_ = dds2zenoh_topics_.empty() && !dds2zenoh_topic_types_.empty();
-  zenoh2dds_auto_discovery_ = zenoh2dds_topics_.empty() && !zenoh2dds_topic_types_.empty();
-  auto_discovery_enabled_ = dds2zenoh_auto_discovery_ || zenoh2dds_auto_discovery_;
+  side_a2b_auto_discovery_ = side_a2b_topics_.empty() && !side_a2b_topic_types_.empty();
+  side_b2a_auto_discovery_ = side_b2a_topics_.empty() && !side_b2a_topic_types_.empty();
+  auto_discovery_enabled_ = side_a2b_auto_discovery_ || side_b2a_auto_discovery_;
 
-  if (dds2zenoh_auto_discovery_) {
-    validate_auto_direction("dds2zenoh", dds2zenoh_topic_types_, dds2zenoh_transports_, dds2zenoh_qos_depths_);
+  if (side_a2b_auto_discovery_) {
+    validate_auto_direction("side_a2b", side_a2b_topic_types_, side_a2b_transports_, side_a2b_qos_depths_);
   } else {
-    validate_static_direction("dds2zenoh", dds2zenoh_topics_, dds2zenoh_topic_types_, dds2zenoh_transports_, dds2zenoh_qos_depths_);
+    validate_static_direction("side_a2b", side_a2b_topics_, side_a2b_topic_types_, side_a2b_transports_, side_a2b_qos_depths_);
   }
 
-  if (zenoh2dds_auto_discovery_) {
-    validate_auto_direction("zenoh2dds", zenoh2dds_topic_types_, zenoh2dds_transports_, zenoh2dds_qos_depths_);
+  if (side_b2a_auto_discovery_) {
+    validate_auto_direction("side_b2a", side_b2a_topic_types_, side_b2a_transports_, side_b2a_qos_depths_);
   } else {
-    validate_static_direction("zenoh2dds", zenoh2dds_topics_, zenoh2dds_topic_types_, zenoh2dds_transports_, zenoh2dds_qos_depths_);
+    validate_static_direction("side_b2a", side_b2a_topics_, side_b2a_topic_types_, side_b2a_transports_, side_b2a_qos_depths_);
   }
 
-  const auto static_routes = dds2zenoh_topics_.size() + zenoh2dds_topics_.size();
+  const auto static_routes = side_a2b_topics_.size() + side_b2a_topics_.size();
   const auto auto_type_rules =
-      (dds2zenoh_auto_discovery_ ? dds2zenoh_topic_types_.size() : 0U) +
-      (zenoh2dds_auto_discovery_ ? zenoh2dds_topic_types_.size() : 0U);
+      (side_a2b_auto_discovery_ ? side_a2b_topic_types_.size() : 0U) +
+      (side_b2a_auto_discovery_ ? side_b2a_topic_types_.size() : 0U);
   if (static_routes + auto_type_rules == 0U) {
-    throw std::runtime_error("At least one route must be configured in 'dds2zenoh' or 'zenoh2dds'.");
+    throw std::runtime_error("At least one route must be configured in 'side_a2b' or 'side_b2a'.");
   }
   if (static_routes > static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())) {
     throw std::runtime_error("Too many static topic rules. Maximum is 65535.");
@@ -330,8 +347,8 @@ void MiddlewareBridge::declareAndLoadParameters() {
 
   RCLCPP_INFO(
       this->get_logger(),
-      "Bridge config: role=%s remote_host=%s tx_port=%d rx_port=%d max_udp_payload_bytes=%d max_shm_message_bytes=%d shm_poll_interval_us=%d reassembly_timeout_ms=%d dds2zenoh_static=%zu zenoh2dds_static=%zu dds2zenoh_auto=%s zenoh2dds_auto=%s",
-      bridge_role_.c_str(),
+      "Bridge config: side=%s remote_host=%s tx_port=%d rx_port=%d max_udp_payload_bytes=%d max_shm_message_bytes=%d shm_poll_interval_us=%d reassembly_timeout_ms=%d side_a2b_static=%zu side_b2a_static=%zu side_a2b_auto=%s side_b2a_auto=%s",
+      bridge_side_.c_str(),
       remote_host_.c_str(),
       tx_port_,
       rx_port_,
@@ -339,10 +356,10 @@ void MiddlewareBridge::declareAndLoadParameters() {
       max_shm_message_bytes_,
       shm_poll_interval_us_,
       reassembly_timeout_ms_,
-      dds2zenoh_topics_.size(),
-      zenoh2dds_topics_.size(),
-      dds2zenoh_auto_discovery_ ? "true" : "false",
-      zenoh2dds_auto_discovery_ ? "true" : "false");
+      side_a2b_topics_.size(),
+      side_b2a_topics_.size(),
+      side_a2b_auto_discovery_ ? "true" : "false",
+      side_b2a_auto_discovery_ ? "true" : "false");
 }
 
 MiddlewareBridge::BridgeQosProfile MiddlewareBridge::defaultQosForTopic(const std::string & topic_name,
@@ -515,7 +532,7 @@ void MiddlewareBridge::updateChannelQos(const std::size_t channel_index,
       channel.qos.depth);
 }
 
-std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
+std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_side_a_to_b,
                                                   const std::string & topic_name,
                                                   const std::string & topic_type,
                                                   const std::string & transport,
@@ -538,10 +555,10 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_dds2zenoh,
   };
 
   const std::string canonical = canonical_transport(transport);
-  const bool is_dds_role = bridge_role_ == "dds";
-  const std::string subscribe_topic = is_dds2zenoh ? (is_dds_role ? topic_name : "") : (is_dds_role ? "" : topic_name);
-  const std::string publish_topic = is_dds2zenoh ? (is_dds_role ? "" : topic_name) : (is_dds_role ? topic_name : "");
-  const std::string channel_key = std::string(is_dds2zenoh ? "d2z|" : "z2d|") + topic_name + "|" + topic_type;
+  const bool is_side_a = bridge_side_ == "a";
+  const std::string subscribe_topic = is_side_a_to_b ? (is_side_a ? topic_name : "") : (is_side_a ? "" : topic_name);
+  const std::string publish_topic = is_side_a_to_b ? (is_side_a ? "" : topic_name) : (is_side_a ? topic_name : "");
+  const std::string channel_key = std::string(is_side_a_to_b ? "a2b|" : "b2a|") + topic_name + "|" + topic_type;
 
   std::lock_guard<std::mutex> lock(channels_mutex_);
   if (channel_keys_.count(channel_key) > 0U) {
@@ -656,7 +673,7 @@ void MiddlewareBridge::setupBridgeChannels() {
   channel_keys_.clear();
   remote_channel_to_local_index_.clear();
   channels_.clear();
-  channels_.reserve(dds2zenoh_topics_.size() + zenoh2dds_topics_.size());
+  channels_.reserve(side_a2b_topics_.size() + side_b2a_topics_.size());
 
   auto qosDepthForRule = [](const std::vector<int64_t> & qos_depths, std::size_t idx) -> std::size_t {
     const int64_t qos_depth = qos_depths.empty() ? 10 : (qos_depths.size() == 1U ? qos_depths.front() : qos_depths[idx]);
@@ -669,27 +686,27 @@ void MiddlewareBridge::setupBridgeChannels() {
     return transports.size() == 1U ? transports.front() : transports[idx];
   };
 
-  for (std::size_t idx = 0; idx < dds2zenoh_topics_.size(); ++idx) {
-    const auto fallback_depth = qosDepthForRule(dds2zenoh_qos_depths_, idx);
-    const auto qos = bridge_role_ == "dds" ? resolveSourceQos(dds2zenoh_topics_[idx], fallback_depth)
-                                           : defaultQosForTopic(dds2zenoh_topics_[idx], fallback_depth);
+  for (std::size_t idx = 0; idx < side_a2b_topics_.size(); ++idx) {
+    const auto fallback_depth = qosDepthForRule(side_a2b_qos_depths_, idx);
+    const auto qos = bridge_side_ == "a" ? resolveSourceQos(side_a2b_topics_[idx], fallback_depth)
+                                         : defaultQosForTopic(side_a2b_topics_[idx], fallback_depth);
     (void)addChannelIfMissing(
         true,
-        dds2zenoh_topics_[idx],
-        dds2zenoh_topic_types_[idx],
-        transportForRule(dds2zenoh_transports_, idx),
+        side_a2b_topics_[idx],
+        side_a2b_topic_types_[idx],
+        transportForRule(side_a2b_transports_, idx),
         qos,
         false);
   }
-  for (std::size_t idx = 0; idx < zenoh2dds_topics_.size(); ++idx) {
-    const auto fallback_depth = qosDepthForRule(zenoh2dds_qos_depths_, idx);
-    const auto qos = bridge_role_ == "zenoh" ? resolveSourceQos(zenoh2dds_topics_[idx], fallback_depth)
-                                             : defaultQosForTopic(zenoh2dds_topics_[idx], fallback_depth);
+  for (std::size_t idx = 0; idx < side_b2a_topics_.size(); ++idx) {
+    const auto fallback_depth = qosDepthForRule(side_b2a_qos_depths_, idx);
+    const auto qos = bridge_side_ == "b" ? resolveSourceQos(side_b2a_topics_[idx], fallback_depth)
+                                         : defaultQosForTopic(side_b2a_topics_[idx], fallback_depth);
     (void)addChannelIfMissing(
         false,
-        zenoh2dds_topics_[idx],
-        zenoh2dds_topic_types_[idx],
-        transportForRule(zenoh2dds_transports_, idx),
+        side_b2a_topics_[idx],
+        side_b2a_topic_types_[idx],
+        transportForRule(side_b2a_transports_, idx),
         qos,
         false);
   }
@@ -726,13 +743,13 @@ void MiddlewareBridge::setupBridgeChannels() {
     return false;
   };
 
-  if (dds2zenoh_auto_discovery_) {
-    use_udp_transport_ = use_udp_transport_ || mayUseUdp(dds2zenoh_transports_);
-    use_shm_transport_ = use_shm_transport_ || mayUseShm(dds2zenoh_transports_);
+  if (side_a2b_auto_discovery_) {
+    use_udp_transport_ = use_udp_transport_ || mayUseUdp(side_a2b_transports_);
+    use_shm_transport_ = use_shm_transport_ || mayUseShm(side_a2b_transports_);
   }
-  if (zenoh2dds_auto_discovery_) {
-    use_udp_transport_ = use_udp_transport_ || mayUseUdp(zenoh2dds_transports_);
-    use_shm_transport_ = use_shm_transport_ || mayUseShm(zenoh2dds_transports_);
+  if (side_b2a_auto_discovery_) {
+    use_udp_transport_ = use_udp_transport_ || mayUseUdp(side_b2a_transports_);
+    use_shm_transport_ = use_shm_transport_ || mayUseShm(side_b2a_transports_);
   }
 
   if (auto_discovery_enabled_ || !channels_.empty()) {
@@ -909,7 +926,7 @@ void MiddlewareBridge::refreshLocalSourceQos() {
 void MiddlewareBridge::announceStaticSourceChannels() {
   struct StaticSourceChannel {
     std::uint16_t channel_id;
-    bool is_dds2zenoh;
+    bool is_side_a_to_b;
     std::string topic_name;
     std::string topic_type;
     std::string transport;
@@ -928,7 +945,7 @@ void MiddlewareBridge::announceStaticSourceChannels() {
       }
       static_source_channels.push_back(StaticSourceChannel{
           static_cast<std::uint16_t>(channel_index),
-          bridge_role_ == "dds",
+          bridge_side_ == "a",
           channel.subscribe_topic,
           channel.topic_type,
           channel.transport_name,
@@ -939,7 +956,7 @@ void MiddlewareBridge::announceStaticSourceChannels() {
   for (const auto & channel : static_source_channels) {
     announceAutoDiscoveredChannel(
         channel.channel_id,
-        channel.is_dds2zenoh,
+        channel.is_side_a_to_b,
         channel.topic_name,
         channel.topic_type,
         channel.transport,
@@ -967,7 +984,7 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
   };
 
   auto scanDirection = [&](const bool enabled,
-                           const bool is_dds2zenoh,
+                           const bool is_side_a_to_b,
                            const std::string & direction_name,
                            const std::vector<std::string> & topic_types,
                            const std::vector<std::string> & transports,
@@ -1001,7 +1018,7 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
         const auto qos = resolveSourceQos(topic_name, fallback_depth);
         bool added = false;
         const auto channel_index = addChannelIfMissing(
-            is_dds2zenoh,
+            is_side_a_to_b,
             topic_name,
             type_name,
             transport,
@@ -1010,7 +1027,7 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
             &added);
         announceAutoDiscoveredChannel(
             static_cast<std::uint16_t>(channel_index),
-            is_dds2zenoh,
+            is_side_a_to_b,
             topic_name,
             type_name,
             transport,
@@ -1024,23 +1041,23 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
 
   // Auto-discovery is directional: only the source side of a direction scans
   // the local graph; the destination side learns channels through announcements.
-  const bool discover_dds2zenoh_locally = dds2zenoh_auto_discovery_ && bridge_role_ == "dds";
-  const bool discover_zenoh2dds_locally = zenoh2dds_auto_discovery_ && bridge_role_ == "zenoh";
+  const bool discover_side_a2b_locally = side_a2b_auto_discovery_ && bridge_side_ == "a";
+  const bool discover_side_b2a_locally = side_b2a_auto_discovery_ && bridge_side_ == "b";
 
   scanDirection(
-      discover_dds2zenoh_locally,
+      discover_side_a2b_locally,
       true,
-      "dds2zenoh",
-      dds2zenoh_topic_types_,
-      dds2zenoh_transports_,
-      dds2zenoh_qos_depths_);
+      "side_a2b",
+      side_a2b_topic_types_,
+      side_a2b_transports_,
+      side_a2b_qos_depths_);
   scanDirection(
-      discover_zenoh2dds_locally,
+      discover_side_b2a_locally,
       false,
-      "zenoh2dds",
-      zenoh2dds_topic_types_,
-      zenoh2dds_transports_,
-      zenoh2dds_qos_depths_);
+      "side_b2a",
+      side_b2a_topic_types_,
+      side_b2a_transports_,
+      side_b2a_qos_depths_);
 
   if (added_count > 0U) {
     RCLCPP_INFO(this->get_logger(), "Auto-discovery added %zu new channel(s).", added_count);
@@ -1110,7 +1127,7 @@ void MiddlewareBridge::sendUdpPayload(const std::uint16_t channel_id, const std:
 }
 
 void MiddlewareBridge::announceAutoDiscoveredChannel(const std::uint16_t channel_id,
-                                                     const bool is_dds2zenoh,
+                                                     const bool is_side_a_to_b,
                                                      const std::string & topic_name,
                                                      const std::string & topic_type,
                                                      const std::string & transport,
@@ -1129,7 +1146,7 @@ void MiddlewareBridge::announceAutoDiscoveredChannel(const std::uint16_t channel
     normalized_transport = "shm";
   }
 
-  const std::string payload = "A2|" + std::to_string(channel_id) + "|" + (is_dds2zenoh ? "d2z" : "z2d") + "|" +
+  const std::string payload = "A2|" + std::to_string(channel_id) + "|" + (is_side_a_to_b ? "a2b" : "b2a") + "|" +
                               normalized_transport + "|" + std::to_string(qos.depth) + "|" +
                               std::to_string(static_cast<int>(qos.reliability)) + "|" +
                               std::to_string(static_cast<int>(qos.durability)) + "|" +
@@ -1176,8 +1193,8 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
     return;
   }
 
-  const bool is_dds2zenoh = fields[2] == "d2z";
-  if (!is_dds2zenoh && fields[2] != "z2d") {
+  const bool is_side_a_to_b = fields[2] == "a2b";
+  if (!is_side_a_to_b && fields[2] != "b2a") {
     return;
   }
 
@@ -1200,7 +1217,7 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
 
   bool added = false;
   const auto local_channel_index = addChannelIfMissing(
-      is_dds2zenoh,
+      is_side_a_to_b,
       topic_name,
       topic_type,
       transport,
