@@ -2,7 +2,7 @@
   ros__parameters:
     num_threads: 8
     remote_host: 127.0.0.1
-    shm_namespace: middleware_bridge
+    shm_namespace: ros_middleware_bridge
     socket_buffer_bytes: 1048576
     max_udp_payload_bytes: 60000
     max_shm_message_bytes: 50331648  # 48 MiB as default in 'rmw_zenoh'

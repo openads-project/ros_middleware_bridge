@@ -18,10 +18,10 @@
 #include <sys/statvfs.h>
 #include <unistd.h>
 
-#include <middleware_bridge/middleware_bridge.hpp>
+#include <ros_middleware_bridge/ros_middleware_bridge.hpp>
 #include <rclcpp/serialization.hpp>
 
-namespace middleware_bridge {
+namespace ros_middleware_bridge {
 
 namespace {
 
@@ -35,7 +35,7 @@ bool isTfStaticTopic(const std::string & topic_name) {
 
 }  // namespace
 
-MiddlewareBridge::MiddlewareBridge() : Node("middleware_bridge") {
+MiddlewareBridge::MiddlewareBridge() : Node("ros_middleware_bridge") {
   try {
     declareAndLoadParameters();
     setupBridgeChannels();
@@ -113,7 +113,7 @@ void MiddlewareBridge::declareAndLoadParameters() {
   num_threads_ = this->declare_parameter<int>("num_threads", 1);
   const auto bridge_side_param = this->declare_parameter<std::string>("bridge_side", "a");
   remote_host_ = this->declare_parameter<std::string>("remote_host", "127.0.0.1");
-  shm_namespace_ = this->declare_parameter<std::string>("shm_namespace", "middleware_bridge");
+  shm_namespace_ = this->declare_parameter<std::string>("shm_namespace", "ros_middleware_bridge");
   tx_port_ = this->declare_parameter<int>("tx_port", 17001);
   rx_port_ = this->declare_parameter<int>("rx_port", 17002);
   socket_buffer_bytes_ = this->declare_parameter<int>("socket_buffer_bytes", 1024 * 1024);
@@ -1645,12 +1645,12 @@ void MiddlewareBridge::closeSharedMemoryChannels() {
   }
 }
 
-}  // namespace middleware_bridge
+}  // namespace ros_middleware_bridge
 
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
 
-  auto node = std::make_shared<middleware_bridge::MiddlewareBridge>();
+  auto node = std::make_shared<ros_middleware_bridge::MiddlewareBridge>();
   rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), node->num_threads_);
   executor.add_node(node);
   executor.spin();

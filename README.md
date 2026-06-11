@@ -1,4 +1,4 @@
-# middleware_bridge
+# ros_middleware_bridge
 
 > Vibe-coded!
 
@@ -14,7 +14,7 @@ The bridge forwards `rclcpp::SerializedMessage` data:
 
 ## Architecture
 
-Both processes run the same node (`middleware_bridge`) and use one shared configuration file:
+Both processes run the same node (`ros_middleware_bridge`) and use one shared configuration file:
 - `config/params.yml`
 
 Flows are defined once per direction:
@@ -36,7 +36,7 @@ Transport is configurable per topic (or per type in auto-discovery mode):
 ## Start
 
 ```bash
-ros2 launch middleware_bridge middleware_bridge_launch.py
+ros2 launch ros_middleware_bridge ros_middleware_bridge_launch.py
 ```
 
 Default:
@@ -46,7 +46,7 @@ Default:
 For example, Fast DDS -> Cyclone DDS only changes the launch-side RMW mapping:
 
 ```bash
-ros2 launch middleware_bridge middleware_bridge_launch.py \
+ros2 launch ros_middleware_bridge ros_middleware_bridge_launch.py \
   side_a_rmw_implementation:=rmw_fastrtps_cpp \
   side_b_rmw_implementation:=rmw_cyclonedds_cpp
 ```

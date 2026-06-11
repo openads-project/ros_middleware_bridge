@@ -11,7 +11,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
-    package_share = get_package_share_directory("middleware_bridge")
+    package_share = get_package_share_directory("ros_middleware_bridge")
     default_params = os.path.join(package_share, "config", "params.yml")
 
     launch_args = [
@@ -39,8 +39,8 @@ def generate_launch_description():
 
     nodes = [
         Node(
-            package="middleware_bridge",
-            executable="middleware_bridge",
+            package="ros_middleware_bridge",
+            executable="ros_middleware_bridge",
             namespace=LaunchConfiguration("namespace"),
             name=LaunchConfiguration("side_a_name"),
             parameters=[
@@ -57,8 +57,8 @@ def generate_launch_description():
             emulate_tty=True,
         ),
         Node(
-            package="middleware_bridge",
-            executable="middleware_bridge",
+            package="ros_middleware_bridge",
+            executable="ros_middleware_bridge",
             namespace=LaunchConfiguration("namespace"),
             name=LaunchConfiguration("side_b_name"),
             parameters=[

@@ -18,7 +18,7 @@
 #include <rmw/types.h>
 #include <tf2_msgs/msg/tf_message.hpp>
 
-namespace middleware_bridge {
+namespace ros_middleware_bridge {
 
 class MiddlewareBridge : public rclcpp::Node {
  public:
@@ -123,7 +123,7 @@ class MiddlewareBridge : public rclcpp::Node {
   void closeSharedMemoryChannels();
 
   std::string remote_host_ = "127.0.0.1";
-  std::string shm_namespace_ = "middleware_bridge";
+  std::string shm_namespace_ = "ros_middleware_bridge";
   std::string bridge_side_ = "a";
   int tx_port_ = 17001;
   int rx_port_ = 17002;
@@ -169,4 +169,4 @@ class MiddlewareBridge : public rclcpp::Node {
   static constexpr std::uint32_t kShmMagic = 0x4D425348;  // "MBSH"
 };
 
-}  // namespace middleware_bridge
+}  // namespace ros_middleware_bridge

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(middleware_bridge)
+project(ros_middleware_bridge)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -9,9 +9,9 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2_msgs REQUIRED)
 
-set(TARGET_NAME middleware_bridge)
+set(TARGET_NAME ros_middleware_bridge)
 
-add_executable(${TARGET_NAME} src/middleware_bridge.cpp)
+add_executable(${TARGET_NAME} src/ros_middleware_bridge.cpp)
 
 target_include_directories(${TARGET_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

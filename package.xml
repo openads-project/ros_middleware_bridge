@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
 
-  <name>middleware_bridge</name>
+  <name>ros_middleware_bridge</name>
   <version>0.0.0</version>
   <description>Generic ROS 2 middleware bridge using serialized topic forwarding between two processes.</description>
 

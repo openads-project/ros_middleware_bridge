@@ -6,4 +6,4 @@ variables:
   TARGET: dev,run
   BASE_IMAGE: rwthika/ros2:jazzy
   RMW_IMPLEMENTATION: rmw_zenoh_cpp
-  COMMAND: ros2 launch middleware_bridge middleware_bridge_launch.py
+  COMMAND: ros2 launch ros_middleware_bridge ros_middleware_bridge_launch.py
