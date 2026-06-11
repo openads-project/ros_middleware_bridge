@@ -4,5 +4,6 @@ include:
 variables:
   PLATFORM: amd64
   TARGET: dev,run
-  BASE_IMAGE: gitlab.ika.rwth-aachen.de:5050/fb-fi/its-modules/monitoring/ros-monitoring:latest
+  BASE_IMAGE: rwthika/ros2:jazzy
+  RMW_IMPLEMENTATION: rmw_zenoh_cpp
   COMMAND: ros2 launch ros_middleware_bridge ros_middleware_bridge_launch.py
