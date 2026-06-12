@@ -33,6 +33,14 @@ bool isTfStaticTopic(const std::string & topic_name) {
           topic_name.compare(topic_name.size() - suffix_length, suffix_length, suffix) == 0);
 }
 
+bool isTfTopic(const std::string & topic_name) {
+  constexpr const char * suffix = "/tf";
+  constexpr std::size_t suffix_length = 3U;
+  return topic_name == "tf" ||
+         (topic_name.size() >= suffix_length &&
+          topic_name.compare(topic_name.size() - suffix_length, suffix_length, suffix) == 0);
+}
+
 }  // namespace
 
 MiddlewareBridge::MiddlewareBridge() : Node("ros_middleware_bridge") {
@@ -439,7 +447,11 @@ MiddlewareBridge::BridgeQosProfile MiddlewareBridge::resolveSourceQos(const std:
     resolved.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
   }
 
-  if (saw_transient_local && (!saw_volatile || isTfStaticTopic(topic_name))) {
+  if (isTfTopic(topic_name)) {
+    resolved.durability = RMW_QOS_POLICY_DURABILITY_VOLATILE;
+  } else if (isTfStaticTopic(topic_name)) {
+    resolved.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
+  } else if (saw_transient_local && !saw_volatile) {
     resolved.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
   } else if (saw_volatile) {
     resolved.durability = RMW_QOS_POLICY_DURABILITY_VOLATILE;
@@ -491,6 +503,8 @@ void MiddlewareBridge::createChannelEndpoints(BridgeChannel & channel, const std
       publisher_qos.history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
       publisher_qos.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
       publisher_qos.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
+    } else if (isTfTopic(channel.publish_topic)) {
+      publisher_qos.durability = RMW_QOS_POLICY_DURABILITY_VOLATILE;
     }
     channel.publisher = this->create_generic_publisher(channel.publish_topic, channel.topic_type, makeRclcppQos(publisher_qos));
   }
