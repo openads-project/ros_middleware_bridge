@@ -91,6 +91,7 @@ Useful launch arguments:
 - Newly appearing matching topics are added at runtime with the configured per-type `transport` and source-side QoS.
 - Reliability, durability, history, and depth are read from source publisher endpoints and announced to the remote bridge.
 - `qos_depths` remains a minimum/fallback depth for normal topics.
+- Output publishers on `/tf` always use volatile durability.
 - Output publishers on `/tf_static` always use reliable, keep-last depth 1, transient-local QoS.
 - Forwarded `/tf_static` messages are aggregated by `child_frame_id` before publishing, so late joiners receive the complete static transform set in the latched sample.
 - Auto-discovered and static source channels are announced to the remote bridge over UDP control packets.
