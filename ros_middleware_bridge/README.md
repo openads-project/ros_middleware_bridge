@@ -90,7 +90,7 @@ already be sufficient.
 
 | Argument | Default | Description |
 | --- | --- | --- |
-| `params_file` | `default_params` | parameter file path |
+| `params` | `os.path.join(get_package_share_directory("ros_middleware_bridge"), "config", "params.yml")` | path to parameter file |
 | `namespace` | `""` | node namespace |
 | `log_level` | `"info"` | ROS logging level (debug, info, warn, error, fatal) |
 | `use_sim_time` | `"false"` | use simulation clock |
