@@ -156,17 +156,19 @@ void MiddlewareBridge::declareAndLoadParameter(const std::string& name,
   }
 }
 
-template void MiddlewareBridge::declareAndLoadParameter<std::string>(
-    const std::string&,
-    std::string&,
-    const std::string&,
-    bool,
-    bool,
-    bool,
-    const std::optional<double>&,
-    const std::optional<double>&,
-    const std::optional<double>&,
-    const std::string&);
+/**
+ * @brief Explicit string instantiation for declaring and loading ROS parameters.
+ */
+template void MiddlewareBridge::declareAndLoadParameter<std::string>(const std::string&,
+                                                                     std::string&,
+                                                                     const std::string&,
+                                                                     bool,
+                                                                     bool,
+                                                                     bool,
+                                                                     const std::optional<double>&,
+                                                                     const std::optional<double>&,
+                                                                     const std::optional<double>&,
+                                                                     const std::string&);
 
 template void MiddlewareBridge::declareAndLoadParameter<int>(const std::string&,
                                                              int&,
@@ -179,29 +181,33 @@ template void MiddlewareBridge::declareAndLoadParameter<int>(const std::string&,
                                                              const std::optional<double>&,
                                                              const std::string&);
 
-template void MiddlewareBridge::declareAndLoadParameter<std::vector<std::string>>(
-    const std::string&,
-    std::vector<std::string>&,
-    const std::string&,
-    bool,
-    bool,
-    bool,
-    const std::optional<double>&,
-    const std::optional<double>&,
-    const std::optional<double>&,
-    const std::string&);
+/**
+ * @brief Explicit string vector instantiation for declaring and loading ROS parameters.
+ */
+template void MiddlewareBridge::declareAndLoadParameter<std::vector<std::string>>(const std::string&,
+                                                                                  std::vector<std::string>&,
+                                                                                  const std::string&,
+                                                                                  bool,
+                                                                                  bool,
+                                                                                  bool,
+                                                                                  const std::optional<double>&,
+                                                                                  const std::optional<double>&,
+                                                                                  const std::optional<double>&,
+                                                                                  const std::string&);
 
-template void MiddlewareBridge::declareAndLoadParameter<std::vector<int64_t>>(
-    const std::string&,
-    std::vector<int64_t>&,
-    const std::string&,
-    bool,
-    bool,
-    bool,
-    const std::optional<double>&,
-    const std::optional<double>&,
-    const std::optional<double>&,
-    const std::string&);
+/**
+ * @brief Explicit integer vector instantiation for declaring and loading ROS parameters.
+ */
+template void MiddlewareBridge::declareAndLoadParameter<std::vector<int64_t>>(const std::string&,
+                                                                              std::vector<int64_t>&,
+                                                                              const std::string&,
+                                                                              bool,
+                                                                              bool,
+                                                                              bool,
+                                                                              const std::optional<double>&,
+                                                                              const std::optional<double>&,
+                                                                              const std::optional<double>&,
+                                                                              const std::string&);
 
 void MiddlewareBridge::declareAndLoadParameters() {
   auto declare_string_array_parameter = [this](const std::string& name, const std::vector<std::string>& default_value,
@@ -221,8 +227,8 @@ void MiddlewareBridge::declareAndLoadParameters() {
     }
   };
 
-  this->declareAndLoadParameter("num_threads", num_threads_, "Number of threads used by the rclcpp MultiThreadedExecutor",
-                                false, false, false, 1.0, 128.0);
+  this->declareAndLoadParameter("num_threads", num_threads_, "Number of threads used by the rclcpp MultiThreadedExecutor", false,
+                                false, false, 1.0, 128.0);
   this->declareAndLoadParameter("bridge_side", bridge_side_, "Bridge side selector: a or b");
   this->declareAndLoadParameter("remote_host", remote_host_, "IPv4 destination used for UDP sends");
   this->declareAndLoadParameter("shm_namespace", shm_namespace_, "Namespace prefix used for shared-memory channel names");
@@ -230,10 +236,9 @@ void MiddlewareBridge::declareAndLoadParameters() {
   this->declareAndLoadParameter("rx_port", rx_port_, "UDP receive port", false, false, false, 1.0, 65535.0);
   this->declareAndLoadParameter("socket_buffer_bytes", socket_buffer_bytes_, "UDP socket send/receive buffer size in bytes",
                                 false, false, false, 1.0, static_cast<double>(std::numeric_limits<int>::max()));
-  this->declareAndLoadParameter(
-      "max_udp_payload_bytes", max_udp_payload_bytes_,
-      "Maximum UDP datagram payload per fragment, including the bridge fragment header", false, false, false,
-      static_cast<double>(sizeof(PacketHeader) + 1U), static_cast<double>(kMaxUdpDatagramBytes));
+  this->declareAndLoadParameter("max_udp_payload_bytes", max_udp_payload_bytes_,
+                                "Maximum UDP datagram payload per fragment, including the bridge fragment header", false, false,
+                                false, static_cast<double>(sizeof(PacketHeader) + 1U), static_cast<double>(kMaxUdpDatagramBytes));
   this->declareAndLoadParameter("max_shm_message_bytes", max_shm_message_bytes_,
                                 "Maximum message size per shared-memory channel in bytes", false, false, false, 1.0,
                                 static_cast<double>(std::numeric_limits<int>::max()));
@@ -243,10 +248,9 @@ void MiddlewareBridge::declareAndLoadParameters() {
   this->declareAndLoadParameter("reassembly_timeout_ms", reassembly_timeout_ms_,
                                 "Timeout for incomplete UDP fragment reassembly in milliseconds", false, false, false, 1.0,
                                 static_cast<double>(std::numeric_limits<int>::max()));
-  this->declareAndLoadParameter(
-      "auto_discovery_wait_ms", auto_discovery_wait_ms_,
-      "Optional wait before the initial auto-discovery scan in milliseconds; 0 disables the wait", false, false, false, 0.0,
-      static_cast<double>(std::numeric_limits<int>::max()));
+  this->declareAndLoadParameter("auto_discovery_wait_ms", auto_discovery_wait_ms_,
+                                "Optional wait before the initial auto-discovery scan in milliseconds; 0 disables the wait",
+                                false, false, false, 0.0, static_cast<double>(std::numeric_limits<int>::max()));
   this->declareAndLoadParameter("auto_discovery_poll_ms", auto_discovery_poll_ms_,
                                 "Poll interval for runtime auto-discovery scans in milliseconds", false, false, false, 1.0,
                                 static_cast<double>(std::numeric_limits<int>::max()));
@@ -279,8 +283,7 @@ void MiddlewareBridge::declareAndLoadParameters() {
                                      "Side A to side B topics; explicit topics in static mode or __auto__ for auto-discovery",
                                      true),
       declare_string_array_parameter("side_a2b.topic_types", std::vector<std::string>{},
-                                     "Side A to side B message types; one type per topic or auto-discovery type filters",
-                                     false),
+                                     "Side A to side B message types; one type per topic or auto-discovery type filters", false),
       declare_string_array_parameter("side_a2b.transports", std::vector<std::string>{},
                                      "Side A to side B transport selection per topic/type: udp or shm", false),
       side_a2b_qos_depths_};
@@ -292,8 +295,7 @@ void MiddlewareBridge::declareAndLoadParameters() {
                                      "Side B to side A topics; explicit topics in static mode or __auto__ for auto-discovery",
                                      true),
       declare_string_array_parameter("side_b2a.topic_types", std::vector<std::string>{},
-                                     "Side B to side A message types; one type per topic or auto-discovery type filters",
-                                     false),
+                                     "Side B to side A message types; one type per topic or auto-discovery type filters", false),
       declare_string_array_parameter("side_b2a.transports", std::vector<std::string>{},
                                      "Side B to side A transport selection per topic/type: udp or shm", false),
       side_b2a_qos_depths_};
@@ -897,7 +899,8 @@ void MiddlewareBridge::setupSockets() {
   rx_address.sin_family = AF_INET;
   rx_address.sin_port = htons(static_cast<uint16_t>(rx_port_));
   rx_address.sin_addr.s_addr = htonl(INADDR_ANY);
-  if (::bind(rx_socket_fd_, reinterpret_cast<struct sockaddr*>(&rx_address),  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+  if (::bind(rx_socket_fd_,
+             reinterpret_cast<struct sockaddr*>(&rx_address),  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
              sizeof(rx_address)) != 0) {
     throw std::runtime_error("Failed to bind RX socket on port " + std::to_string(rx_port_) + ": " + std::strerror(errno));
   }
@@ -916,7 +919,8 @@ void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel& channel, const st
         static_cast<std::uint64_t>(shm_stats.f_bavail) * static_cast<std::uint64_t>(shm_stats.f_frsize);
     if (available_bytes < static_cast<std::uint64_t>(mapping_size)) {
       RCLCPP_WARN(this->get_logger(),
-                  "Shared-memory channel '%s' requests %zu bytes, but /dev/shm has only %" PRIu64 " bytes available. "
+                  "Shared-memory channel '%s' requests %zu bytes, but /dev/shm has only %" PRIu64
+                  " bytes available. "
                   "Consider reducing max_shm_message_bytes, using fewer SHM channels, or increasing container --shm-size.",
                   shm_name.c_str(), mapping_size, available_bytes);
     }
@@ -940,7 +944,7 @@ void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel& channel, const st
     throw std::runtime_error(error);
   }
 
-  auto* header = reinterpret_cast<ShmChannelHeader*>(mapping);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+  auto* header = reinterpret_cast<ShmChannelHeader*>(mapping);         // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
   auto* payload = std::next(reinterpret_cast<std::uint8_t*>(mapping),  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
                             static_cast<std::ptrdiff_t>(sizeof(ShmChannelHeader)));
   const auto expected_capacity = static_cast<std::uint32_t>(max_shm_message_bytes_);
@@ -1184,9 +1188,10 @@ void MiddlewareBridge::sendUdpPayload(const std::uint16_t channel_id,
       std::copy_n(payload_fragment_begin, fragment_payload_size, packet_payload_begin);
     }
 
-    const ssize_t bytes_sent = ::sendto(tx_socket_fd_, packet.data(), packet.size(), 0,
-                                        reinterpret_cast<struct sockaddr*>(&tx_address_),  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                                        sizeof(tx_address_));
+    const ssize_t bytes_sent =
+        ::sendto(tx_socket_fd_, packet.data(), packet.size(), 0,
+                 reinterpret_cast<struct sockaddr*>(&tx_address_),  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                 sizeof(tx_address_));
     if (bytes_sent < 0 || static_cast<std::size_t>(bytes_sent) != packet.size()) {
       RCLCPP_WARN(this->get_logger(), "Failed UDP send for channel %u: %s", channel_id, std::strerror(errno));
       return;
@@ -1350,9 +1355,10 @@ void MiddlewareBridge::receiverLoop() {
     }
 
     source_length = sizeof(source_address);
-    const ssize_t received_bytes = ::recvfrom(rx_socket_fd_, receive_buffer.data(), receive_buffer.size(), 0,
-                                              reinterpret_cast<struct sockaddr*>(&source_address),  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-                                              &source_length);
+    const ssize_t received_bytes =
+        ::recvfrom(rx_socket_fd_, receive_buffer.data(), receive_buffer.size(), 0,
+                   reinterpret_cast<struct sockaddr*>(&source_address),  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+                   &source_length);
 
     if (received_bytes < 0) {
       if (!receiver_running_.load()) {
