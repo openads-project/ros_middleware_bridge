@@ -1,10 +1,13 @@
-#include <algorithm>
+// Copyright Institute for Automotive Engineering (ika), RWTH Aachen University
+// SPDX-License-Identifier: Apache-2.0
+
 #include <arpa/inet.h>
-#include <chrono>
+#include <fcntl.h>
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
-#include <fcntl.h>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -18,27 +21,25 @@
 #include <sys/statvfs.h>
 #include <unistd.h>
 
-#include <ros_middleware_bridge/ros_middleware_bridge.hpp>
 #include <rclcpp/serialization.hpp>
+#include <ros_middleware_bridge/ros_middleware_bridge.hpp>
 
 namespace ros_middleware_bridge {
 
 namespace {
 
-bool isTfStaticTopic(const std::string & topic_name) {
-  constexpr const char * suffix = "/tf_static";
+bool isTfStaticTopic(const std::string& topic_name) {
+  constexpr const char* suffix = "/tf_static";
   constexpr std::size_t suffix_length = 10U;
-  return topic_name == "tf_static" ||
-         (topic_name.size() >= suffix_length &&
-          topic_name.compare(topic_name.size() - suffix_length, suffix_length, suffix) == 0);
+  return topic_name == "tf_static" || (topic_name.size() >= suffix_length &&
+                                       topic_name.compare(topic_name.size() - suffix_length, suffix_length, suffix) == 0);
 }
 
-bool isTfTopic(const std::string & topic_name) {
-  constexpr const char * suffix = "/tf";
+bool isTfTopic(const std::string& topic_name) {
+  constexpr const char* suffix = "/tf";
   constexpr std::size_t suffix_length = 3U;
-  return topic_name == "tf" ||
-         (topic_name.size() >= suffix_length &&
-          topic_name.compare(topic_name.size() - suffix_length, suffix_length, suffix) == 0);
+  return topic_name == "tf" || (topic_name.size() >= suffix_length &&
+                                topic_name.compare(topic_name.size() - suffix_length, suffix_length, suffix) == 0);
 }
 
 }  // namespace
@@ -77,15 +78,13 @@ MiddlewareBridge::MiddlewareBridge() : Node("ros_middleware_bridge") {
     }
 
     if ((auto_discovery_enabled_ || use_udp_transport_) && auto_discovery_poll_ms_ > 0) {
-      auto_discovery_timer_ = this->create_wall_timer(
-          std::chrono::milliseconds(auto_discovery_poll_ms_),
-          [this]() {
-            this->refreshLocalSourceQos();
-            if (this->use_udp_transport_) {
-              this->announceStaticSourceChannels();
-            }
-            this->runAutoDiscoveryScan();
-          });
+      auto_discovery_timer_ = this->create_wall_timer(std::chrono::milliseconds(auto_discovery_poll_ms_), [this]() {
+        this->refreshLocalSourceQos();
+        if (this->use_udp_transport_) {
+          this->announceStaticSourceChannels();
+        }
+        this->runAutoDiscoveryScan();
+      });
     }
   } catch (...) {
     stopBackgroundThreads();
@@ -100,18 +99,14 @@ MiddlewareBridge::~MiddlewareBridge() {
 }
 
 void MiddlewareBridge::declareAndLoadParameters() {
-  auto declare_string_array_parameter = [this](const std::string & name,
-                                               const std::vector<std::string> & default_value,
+  auto declare_string_array_parameter = [this](const std::string& name, const std::vector<std::string>& default_value,
                                                bool fallback_to_empty_on_unset) -> std::vector<std::string> {
     try {
       return this->declare_parameter<std::vector<std::string>>(name, default_value);
-    } catch (const rclcpp::exceptions::InvalidParameterValueException & ex) {
+    } catch (const rclcpp::exceptions::InvalidParameterValueException& ex) {
       const std::string message = ex.what();
       if (fallback_to_empty_on_unset && message.find("No parameter value set") != std::string::npos) {
-        RCLCPP_WARN(
-            this->get_logger(),
-            "Parameter '%s' is set without value. Falling back to empty list.",
-            name.c_str());
+        RCLCPP_WARN(this->get_logger(), "Parameter '%s' is set without value. Falling back to empty list.", name.c_str());
         return {};
       }
       throw;
@@ -132,12 +127,8 @@ void MiddlewareBridge::declareAndLoadParameters() {
   auto_discovery_wait_ms_ = this->declare_parameter<int>("auto_discovery_wait_ms", 0);
   auto_discovery_poll_ms_ = this->declare_parameter<int>("auto_discovery_poll_ms", 1000);
 
-  auto canonical_bridge_side = [](std::string value, const std::string & parameter_name) -> std::string {
-    std::transform(
-        value.begin(),
-        value.end(),
-        value.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  auto canonical_bridge_side = [](std::string value, const std::string& parameter_name) -> std::string {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     std::replace(value.begin(), value.end(), '-', '_');
 
     if (value == "a" || value == "side_a" || value == "sidea") {
@@ -147,9 +138,7 @@ void MiddlewareBridge::declareAndLoadParameters() {
       return "b";
     }
 
-    throw std::runtime_error(
-        "Parameter '" + parameter_name + "' must resolve to side A or side B (e.g. a, side_a, b, side_b)."
-    );
+    throw std::runtime_error("Parameter '" + parameter_name + "' must resolve to side A or side B (e.g. a, side_a, b, side_b).");
   };
 
   bridge_side_ = canonical_bridge_side(bridge_side_param, "bridge_side");
@@ -181,16 +170,12 @@ void MiddlewareBridge::declareAndLoadParameters() {
   side_b2a_transports_ = side_b2a_config.transports;
   side_b2a_qos_depths_ = side_b2a_config.qos_depths;
 
-  auto normalize_auto_discovery_topics = [](std::vector<std::string> & topics) {
+  auto normalize_auto_discovery_topics = [](std::vector<std::string>& topics) {
     if (topics.size() != 1U) {
       return;
     }
     std::string value = topics.front();
-    std::transform(
-        value.begin(),
-        value.end(),
-        value.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (value.empty() || value == "__auto__" || value == "__auto_discovery__") {
       topics.clear();
     }
@@ -206,11 +191,8 @@ void MiddlewareBridge::declareAndLoadParameters() {
   }
 
   auto canonical_transport = [](std::string transport) -> std::string {
-    std::transform(
-        transport.begin(),
-        transport.end(),
-        transport.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(transport.begin(), transport.end(), transport.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (transport == "udp") {
       return "udp";
     }
@@ -220,30 +202,31 @@ void MiddlewareBridge::declareAndLoadParameters() {
     throw std::runtime_error("Unsupported transport '" + transport + "'. Supported: udp, shm.");
   };
 
-  auto validate_static_direction = [&canonical_transport](const std::string & direction_name,
-                                                          const std::vector<std::string> & topics,
-                                                          const std::vector<std::string> & types,
-                                                          const std::vector<std::string> & transports,
-                                                          const std::vector<int64_t> & qos_depths) {
+  auto validate_static_direction = [&canonical_transport](
+                                       const std::string& direction_name, const std::vector<std::string>& topics,
+                                       const std::vector<std::string>& types, const std::vector<std::string>& transports,
+                                       const std::vector<int64_t>& qos_depths) {
     if (topics.size() != types.size()) {
-      throw std::runtime_error(
-          "Parameters '" + direction_name + ".topics' and '" + direction_name + ".topic_types' must have identical lengths.");
+      throw std::runtime_error("Parameters '" + direction_name + ".topics' and '" + direction_name +
+                               ".topic_types' must have identical lengths.");
     }
     if (!transports.empty() && transports.size() != 1U && transports.size() != topics.size()) {
-      throw std::runtime_error(
-          "Parameter '" + direction_name + ".transports' must be empty, contain one value, or match '" + direction_name + ".topics'.");
+      throw std::runtime_error("Parameter '" + direction_name + ".transports' must be empty, contain one value, or match '" +
+                               direction_name + ".topics'.");
     }
     if (!qos_depths.empty() && qos_depths.size() != 1U && qos_depths.size() != topics.size()) {
-      throw std::runtime_error(
-          "Parameter '" + direction_name + ".qos_depths' must be empty, contain one value, or match '" + direction_name + ".topics'.");
+      throw std::runtime_error("Parameter '" + direction_name + ".qos_depths' must be empty, contain one value, or match '" +
+                               direction_name + ".topics'.");
     }
 
     for (std::size_t idx = 0; idx < topics.size(); ++idx) {
       if (topics[idx].empty()) {
-        throw std::runtime_error("Parameter '" + direction_name + ".topics' contains an empty entry at index " + std::to_string(idx) + ".");
+        throw std::runtime_error("Parameter '" + direction_name + ".topics' contains an empty entry at index " +
+                                 std::to_string(idx) + ".");
       }
       if (types[idx].empty()) {
-        throw std::runtime_error("Parameter '" + direction_name + ".topic_types' contains an empty entry at index " + std::to_string(idx) + ".");
+        throw std::runtime_error("Parameter '" + direction_name + ".topic_types' contains an empty entry at index " +
+                                 std::to_string(idx) + ".");
       }
       const int64_t qos_depth = qos_depths.empty() ? 10 : (qos_depths.size() == 1U ? qos_depths.front() : qos_depths[idx]);
       if (qos_depth <= 0) {
@@ -252,40 +235,39 @@ void MiddlewareBridge::declareAndLoadParameters() {
       if (!transports.empty()) {
         try {
           (void)canonical_transport(transports.size() == 1U ? transports.front() : transports[idx]);
-        } catch (const std::runtime_error & ex) {
-          throw std::runtime_error(
-              "Parameter '" + direction_name + ".transports' contains unsupported value at index " + std::to_string(idx) + ": " + ex.what());
+        } catch (const std::runtime_error& ex) {
+          throw std::runtime_error("Parameter '" + direction_name + ".transports' contains unsupported value at index " +
+                                   std::to_string(idx) + ": " + ex.what());
         }
       }
     }
   };
 
-  auto validate_auto_direction = [&canonical_transport](const std::string & direction_name,
-                                                        const std::vector<std::string> & types,
-                                                        const std::vector<std::string> & transports,
-                                                        const std::vector<int64_t> & qos_depths) {
+  auto validate_auto_direction = [&canonical_transport](const std::string& direction_name, const std::vector<std::string>& types,
+                                                        const std::vector<std::string>& transports,
+                                                        const std::vector<int64_t>& qos_depths) {
     if (types.empty()) {
-      throw std::runtime_error(
-          "Auto-discovery for '" + direction_name + "' requires at least one entry in '" + direction_name + ".topic_types'.");
+      throw std::runtime_error("Auto-discovery for '" + direction_name + "' requires at least one entry in '" + direction_name +
+                               ".topic_types'.");
     }
     if (!transports.empty() && transports.size() != 1U && transports.size() != types.size()) {
-      throw std::runtime_error(
-          "Parameter '" + direction_name + ".transports' must be empty, contain one value, or match '" + direction_name + ".topic_types' in auto-discovery mode.");
+      throw std::runtime_error("Parameter '" + direction_name + ".transports' must be empty, contain one value, or match '" +
+                               direction_name + ".topic_types' in auto-discovery mode.");
     }
     if (!qos_depths.empty() && qos_depths.size() != 1U && qos_depths.size() != types.size()) {
-      throw std::runtime_error(
-          "Parameter '" + direction_name + ".qos_depths' must be empty, contain one value, or match '" + direction_name + ".topic_types' in auto-discovery mode.");
+      throw std::runtime_error("Parameter '" + direction_name + ".qos_depths' must be empty, contain one value, or match '" +
+                               direction_name + ".topic_types' in auto-discovery mode.");
     }
 
     std::unordered_set<std::string> seen_types;
     for (std::size_t idx = 0; idx < types.size(); ++idx) {
       if (types[idx].empty()) {
-        throw std::runtime_error("Parameter '" + direction_name + ".topic_types' contains an empty entry at index " + std::to_string(idx) + ".");
+        throw std::runtime_error("Parameter '" + direction_name + ".topic_types' contains an empty entry at index " +
+                                 std::to_string(idx) + ".");
       }
       if (!seen_types.insert(types[idx]).second) {
-        throw std::runtime_error(
-            "Parameter '" + direction_name + ".topic_types' contains duplicate type '" + types[idx] +
-            "' in auto-discovery mode. Configure each type only once.");
+        throw std::runtime_error("Parameter '" + direction_name + ".topic_types' contains duplicate type '" + types[idx] +
+                                 "' in auto-discovery mode. Configure each type only once.");
       }
       const int64_t qos_depth = qos_depths.empty() ? 10 : (qos_depths.size() == 1U ? qos_depths.front() : qos_depths[idx]);
       if (qos_depth <= 0) {
@@ -294,9 +276,9 @@ void MiddlewareBridge::declareAndLoadParameters() {
       if (!transports.empty()) {
         try {
           (void)canonical_transport(transports.size() == 1U ? transports.front() : transports[idx]);
-        } catch (const std::runtime_error & ex) {
-          throw std::runtime_error(
-              "Parameter '" + direction_name + ".transports' contains unsupported value at index " + std::to_string(idx) + ": " + ex.what());
+        } catch (const std::runtime_error& ex) {
+          throw std::runtime_error("Parameter '" + direction_name + ".transports' contains unsupported value at index " +
+                                   std::to_string(idx) + ": " + ex.what());
         }
       }
     }
@@ -319,9 +301,8 @@ void MiddlewareBridge::declareAndLoadParameters() {
   }
 
   const auto static_routes = side_a2b_topics_.size() + side_b2a_topics_.size();
-  const auto auto_type_rules =
-      (side_a2b_auto_discovery_ ? side_a2b_topic_types_.size() : 0U) +
-      (side_b2a_auto_discovery_ ? side_b2a_topic_types_.size() : 0U);
+  const auto auto_type_rules = (side_a2b_auto_discovery_ ? side_a2b_topic_types_.size() : 0U) +
+                               (side_b2a_auto_discovery_ ? side_b2a_topic_types_.size() : 0U);
   if (static_routes + auto_type_rules == 0U) {
     throw std::runtime_error("At least one route must be configured in 'side_a2b' or 'side_b2a'.");
   }
@@ -335,10 +316,10 @@ void MiddlewareBridge::declareAndLoadParameters() {
   if (rx_port_ <= 0 || rx_port_ > std::numeric_limits<std::uint16_t>::max()) {
     throw std::runtime_error("Parameter 'rx_port' must be in range [1, 65535].");
   }
-  if (max_udp_payload_bytes_ <= static_cast<int>(sizeof(PacketHeader)) || max_udp_payload_bytes_ > static_cast<int>(kMaxUdpDatagramBytes)) {
-    throw std::runtime_error(
-        "Parameter 'max_udp_payload_bytes' must be in range (" + std::to_string(sizeof(PacketHeader)) + ", " +
-        std::to_string(kMaxUdpDatagramBytes) + "].");
+  if (max_udp_payload_bytes_ <= static_cast<int>(sizeof(PacketHeader)) ||
+      max_udp_payload_bytes_ > static_cast<int>(kMaxUdpDatagramBytes)) {
+    throw std::runtime_error("Parameter 'max_udp_payload_bytes' must be in range (" + std::to_string(sizeof(PacketHeader)) +
+                             ", " + std::to_string(kMaxUdpDatagramBytes) + "].");
   }
   if (max_shm_message_bytes_ <= 0) {
     throw std::runtime_error("Parameter 'max_shm_message_bytes' must be greater than zero.");
@@ -353,35 +334,26 @@ void MiddlewareBridge::declareAndLoadParameters() {
     throw std::runtime_error("Parameter 'shm_namespace' must not be empty.");
   }
 
-  RCLCPP_INFO(
-      this->get_logger(),
-      "Bridge config: side=%s remote_host=%s tx_port=%d rx_port=%d max_udp_payload_bytes=%d max_shm_message_bytes=%d shm_poll_interval_us=%d reassembly_timeout_ms=%d side_a2b_static=%zu side_b2a_static=%zu side_a2b_auto=%s side_b2a_auto=%s",
-      bridge_side_.c_str(),
-      remote_host_.c_str(),
-      tx_port_,
-      rx_port_,
-      max_udp_payload_bytes_,
-      max_shm_message_bytes_,
-      shm_poll_interval_us_,
-      reassembly_timeout_ms_,
-      side_a2b_topics_.size(),
-      side_b2a_topics_.size(),
-      side_a2b_auto_discovery_ ? "true" : "false",
-      side_b2a_auto_discovery_ ? "true" : "false");
+  RCLCPP_INFO(this->get_logger(),
+              "Bridge config: side=%s remote_host=%s tx_port=%d rx_port=%d max_udp_payload_bytes=%d max_shm_message_bytes=%d "
+              "shm_poll_interval_us=%d reassembly_timeout_ms=%d side_a2b_static=%zu side_b2a_static=%zu side_a2b_auto=%s "
+              "side_b2a_auto=%s",
+              bridge_side_.c_str(), remote_host_.c_str(), tx_port_, rx_port_, max_udp_payload_bytes_, max_shm_message_bytes_,
+              shm_poll_interval_us_, reassembly_timeout_ms_, side_a2b_topics_.size(), side_b2a_topics_.size(),
+              side_a2b_auto_discovery_ ? "true" : "false", side_b2a_auto_discovery_ ? "true" : "false");
 }
 
-MiddlewareBridge::BridgeQosProfile MiddlewareBridge::defaultQosForTopic(const std::string & topic_name,
-                                                                         const std::size_t fallback_depth) const {
+MiddlewareBridge::BridgeQosProfile MiddlewareBridge::defaultQosForTopic(const std::string& topic_name,
+                                                                        const std::size_t fallback_depth) const {
   BridgeQosProfile qos;
   qos.depth = std::max<std::size_t>(1U, fallback_depth);
   qos.history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
   qos.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
-  qos.durability =
-      isTfStaticTopic(topic_name) ? RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL : RMW_QOS_POLICY_DURABILITY_VOLATILE;
+  qos.durability = isTfStaticTopic(topic_name) ? RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL : RMW_QOS_POLICY_DURABILITY_VOLATILE;
   return qos;
 }
 
-MiddlewareBridge::BridgeQosProfile MiddlewareBridge::resolveSourceQos(const std::string & topic_name,
+MiddlewareBridge::BridgeQosProfile MiddlewareBridge::resolveSourceQos(const std::string& topic_name,
                                                                       const std::size_t fallback_depth) const {
   auto resolved = defaultQosForTopic(topic_name, fallback_depth);
   const auto endpoints = this->get_publishers_info_by_topic(topic_name);
@@ -397,10 +369,10 @@ MiddlewareBridge::BridgeQosProfile MiddlewareBridge::resolveSourceQos(const std:
   bool saw_keep_last = false;
   std::size_t max_depth = resolved.depth;
 
-  for (const auto & info : endpoints) {
+  for (const auto& info : endpoints) {
     rclcpp::QoS endpoint_qos(0);
     endpoint_qos = info.qos_profile();
-    const auto & rmw_qos = endpoint_qos.get_rmw_qos_profile();
+    const auto& rmw_qos = endpoint_qos.get_rmw_qos_profile();
 
     if (rmw_qos.depth > 0U) {
       max_depth = std::max<std::size_t>(max_depth, static_cast<std::size_t>(rmw_qos.depth));
@@ -464,30 +436,26 @@ MiddlewareBridge::BridgeQosProfile MiddlewareBridge::resolveSourceQos(const std:
   }
 
   if (saw_best_effort && saw_reliable) {
-    RCLCPP_WARN(
-        this->get_logger(),
-        "Topic '%s' has mixed publisher reliability. Using best_effort so the bridge subscription remains compatible.",
-        topic_name.c_str());
+    RCLCPP_WARN(this->get_logger(),
+                "Topic '%s' has mixed publisher reliability. Using best_effort so the bridge subscription remains compatible.",
+                topic_name.c_str());
   }
   if (saw_transient_local && saw_volatile) {
-    RCLCPP_WARN(
-        this->get_logger(),
-        "Topic '%s' has mixed publisher durability. Using durability policy %d.",
-        topic_name.c_str(),
-        static_cast<int>(resolved.durability));
+    RCLCPP_WARN(this->get_logger(), "Topic '%s' has mixed publisher durability. Using durability policy %d.", topic_name.c_str(),
+                static_cast<int>(resolved.durability));
   }
 
   return resolved;
 }
 
-bool MiddlewareBridge::qosProfilesEqual(const BridgeQosProfile & lhs, const BridgeQosProfile & rhs) {
+bool MiddlewareBridge::qosProfilesEqual(const BridgeQosProfile& lhs, const BridgeQosProfile& rhs) {
   return lhs.depth == rhs.depth && lhs.history == rhs.history && lhs.reliability == rhs.reliability &&
          lhs.durability == rhs.durability;
 }
 
-rclcpp::QoS MiddlewareBridge::makeRclcppQos(const BridgeQosProfile & qos) const {
+rclcpp::QoS MiddlewareBridge::makeRclcppQos(const BridgeQosProfile& qos) const {
   rclcpp::QoS rclcpp_qos(rclcpp::KeepLast(qos.depth));
-  auto & rmw_qos = rclcpp_qos.get_rmw_qos_profile();
+  auto& rmw_qos = rclcpp_qos.get_rmw_qos_profile();
   rmw_qos.depth = qos.depth;
   rmw_qos.history = qos.history;
   rmw_qos.reliability = qos.reliability;
@@ -495,7 +463,7 @@ rclcpp::QoS MiddlewareBridge::makeRclcppQos(const BridgeQosProfile & qos) const 
   return rclcpp_qos;
 }
 
-void MiddlewareBridge::createChannelEndpoints(BridgeChannel & channel, const std::size_t channel_index) {
+void MiddlewareBridge::createChannelEndpoints(BridgeChannel& channel, const std::size_t channel_index) {
   if (!channel.publish_topic.empty()) {
     auto publisher_qos = channel.qos;
     if (isTfStaticTopic(channel.publish_topic)) {
@@ -509,56 +477,42 @@ void MiddlewareBridge::createChannelEndpoints(BridgeChannel & channel, const std
     channel.publisher = this->create_generic_publisher(channel.publish_topic, channel.topic_type, makeRclcppQos(publisher_qos));
   }
   if (!channel.subscribe_topic.empty()) {
-    channel.subscriber = this->create_generic_subscription(
-        channel.subscribe_topic,
-        channel.topic_type,
-        makeRclcppQos(channel.qos),
-        [this, channel_index](std::shared_ptr<rclcpp::SerializedMessage> msg) {
-          if (msg != nullptr) {
-            this->forwardSerializedMessage(channel_index, *msg);
-          }
-        });
+    channel.subscriber =
+        this->create_generic_subscription(channel.subscribe_topic, channel.topic_type, makeRclcppQos(channel.qos),
+                                          [this, channel_index](std::shared_ptr<rclcpp::SerializedMessage> msg) {
+                                            if (msg != nullptr) {
+                                              this->forwardSerializedMessage(channel_index, *msg);
+                                            }
+                                          });
   }
 }
 
-void MiddlewareBridge::updateChannelQos(const std::size_t channel_index,
-                                        const BridgeQosProfile & qos,
-                                        const char * reason) {
+void MiddlewareBridge::updateChannelQos(const std::size_t channel_index, const BridgeQosProfile& qos, const char* reason) {
   std::lock_guard<std::mutex> lock(channels_mutex_);
   if (channel_index >= channels_.size() || qosProfilesEqual(channels_[channel_index].qos, qos)) {
     return;
   }
 
-  auto & channel = channels_[channel_index];
+  auto& channel = channels_[channel_index];
   channel.publisher.reset();
   channel.subscriber.reset();
   channel.qos = qos;
   createChannelEndpoints(channel, channel_index);
 
-  RCLCPP_INFO(
-      this->get_logger(),
-      "Updated QoS for rule %zu from %s: reliability=%d durability=%d history=%d depth=%zu",
-      channel_index,
-      reason,
-      static_cast<int>(channel.qos.reliability),
-      static_cast<int>(channel.qos.durability),
-      static_cast<int>(channel.qos.history),
-      channel.qos.depth);
+  RCLCPP_INFO(this->get_logger(), "Updated QoS for rule %zu from %s: reliability=%d durability=%d history=%d depth=%zu",
+              channel_index, reason, static_cast<int>(channel.qos.reliability), static_cast<int>(channel.qos.durability),
+              static_cast<int>(channel.qos.history), channel.qos.depth);
 }
 
 std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_side_a_to_b,
-                                                  const std::string & topic_name,
-                                                  const std::string & topic_type,
-                                                  const std::string & transport,
-                                                  const BridgeQosProfile & qos,
+                                                  const std::string& topic_name,
+                                                  const std::string& topic_type,
+                                                  const std::string& transport,
+                                                  const BridgeQosProfile& qos,
                                                   const bool from_auto_discovery,
-                                                  bool * added) {
+                                                  bool* added) {
   auto canonical_transport = [](std::string value) -> std::string {
-    std::transform(
-        value.begin(),
-        value.end(),
-        value.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (value == "udp") {
       return "udp";
     }
@@ -580,23 +534,17 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_side_a_to_b,
       *added = false;
     }
     for (std::size_t idx = 0; idx < channels_.size(); ++idx) {
-      auto & channel = channels_[idx];
-      if (channel.topic_type == topic_type &&
-          channel.subscribe_topic == subscribe_topic &&
+      auto& channel = channels_[idx];
+      if (channel.topic_type == topic_type && channel.subscribe_topic == subscribe_topic &&
           channel.publish_topic == publish_topic) {
         if (!qosProfilesEqual(channel.qos, qos)) {
           channel.publisher.reset();
           channel.subscriber.reset();
           channel.qos = qos;
           createChannelEndpoints(channel, idx);
-          RCLCPP_INFO(
-              this->get_logger(),
-              "Updated QoS for rule %zu: reliability=%d durability=%d history=%d depth=%zu",
-              idx,
-              static_cast<int>(channel.qos.reliability),
-              static_cast<int>(channel.qos.durability),
-              static_cast<int>(channel.qos.history),
-              channel.qos.depth);
+          RCLCPP_INFO(this->get_logger(), "Updated QoS for rule %zu: reliability=%d durability=%d history=%d depth=%zu", idx,
+                      static_cast<int>(channel.qos.reliability), static_cast<int>(channel.qos.durability),
+                      static_cast<int>(channel.qos.history), channel.qos.depth);
         }
         return idx;
       }
@@ -631,7 +579,7 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_side_a_to_b,
   channel_keys_.insert(channel_key);
 
   if (channels_.back().transport == TransportType::Shm && receiver_running_.load()) {
-    const auto sanitizeName = [](const std::string & raw) -> std::string {
+    const auto sanitizeName = [](const std::string& raw) -> std::string {
       std::string out;
       out.reserve(raw.size());
       for (const char c : raw) {
@@ -656,25 +604,13 @@ std::size_t MiddlewareBridge::addChannelIfMissing(const bool is_side_a_to_b,
     direction = "rx-only";
   }
 
-  RCLCPP_INFO(
-      this->get_logger(),
-      "Rule %zu (%s, transport=%s%s): subscribe '%s' -> bridge -> publish '%s' (%s, depth=%zu)",
-      channel_index,
-      direction.c_str(),
-      channels_.back().transport_name.c_str(),
-      from_auto_discovery ? ", auto" : "",
-      channels_.back().subscribe_topic.c_str(),
-      channels_.back().publish_topic.c_str(),
-      channels_.back().topic_type.c_str(),
-      channels_.back().qos.depth);
-  RCLCPP_INFO(
-      this->get_logger(),
-      "Rule %zu QoS: reliability=%d durability=%d history=%d depth=%zu",
-      channel_index,
-      static_cast<int>(channels_.back().qos.reliability),
-      static_cast<int>(channels_.back().qos.durability),
-      static_cast<int>(channels_.back().qos.history),
-      channels_.back().qos.depth);
+  RCLCPP_INFO(this->get_logger(), "Rule %zu (%s, transport=%s%s): subscribe '%s' -> bridge -> publish '%s' (%s, depth=%zu)",
+              channel_index, direction.c_str(), channels_.back().transport_name.c_str(), from_auto_discovery ? ", auto" : "",
+              channels_.back().subscribe_topic.c_str(), channels_.back().publish_topic.c_str(),
+              channels_.back().topic_type.c_str(), channels_.back().qos.depth);
+  RCLCPP_INFO(this->get_logger(), "Rule %zu QoS: reliability=%d durability=%d history=%d depth=%zu", channel_index,
+              static_cast<int>(channels_.back().qos.reliability), static_cast<int>(channels_.back().qos.durability),
+              static_cast<int>(channels_.back().qos.history), channels_.back().qos.depth);
   if (added != nullptr) {
     *added = true;
   }
@@ -689,11 +625,11 @@ void MiddlewareBridge::setupBridgeChannels() {
   channels_.clear();
   channels_.reserve(side_a2b_topics_.size() + side_b2a_topics_.size());
 
-  auto qosDepthForRule = [](const std::vector<int64_t> & qos_depths, std::size_t idx) -> std::size_t {
+  auto qosDepthForRule = [](const std::vector<int64_t>& qos_depths, std::size_t idx) -> std::size_t {
     const int64_t qos_depth = qos_depths.empty() ? 10 : (qos_depths.size() == 1U ? qos_depths.front() : qos_depths[idx]);
     return static_cast<std::size_t>(qos_depth);
   };
-  auto transportForRule = [](const std::vector<std::string> & transports, std::size_t idx) -> std::string {
+  auto transportForRule = [](const std::vector<std::string>& transports, std::size_t idx) -> std::string {
     if (transports.empty()) {
       return "udp";
     }
@@ -704,52 +640,36 @@ void MiddlewareBridge::setupBridgeChannels() {
     const auto fallback_depth = qosDepthForRule(side_a2b_qos_depths_, idx);
     const auto qos = bridge_side_ == "a" ? resolveSourceQos(side_a2b_topics_[idx], fallback_depth)
                                          : defaultQosForTopic(side_a2b_topics_[idx], fallback_depth);
-    (void)addChannelIfMissing(
-        true,
-        side_a2b_topics_[idx],
-        side_a2b_topic_types_[idx],
-        transportForRule(side_a2b_transports_, idx),
-        qos,
-        false);
+    (void)addChannelIfMissing(true, side_a2b_topics_[idx], side_a2b_topic_types_[idx],
+                              transportForRule(side_a2b_transports_, idx), qos, false);
   }
   for (std::size_t idx = 0; idx < side_b2a_topics_.size(); ++idx) {
     const auto fallback_depth = qosDepthForRule(side_b2a_qos_depths_, idx);
     const auto qos = bridge_side_ == "b" ? resolveSourceQos(side_b2a_topics_[idx], fallback_depth)
                                          : defaultQosForTopic(side_b2a_topics_[idx], fallback_depth);
-    (void)addChannelIfMissing(
-        false,
-        side_b2a_topics_[idx],
-        side_b2a_topic_types_[idx],
-        transportForRule(side_b2a_transports_, idx),
-        qos,
-        false);
+    (void)addChannelIfMissing(false, side_b2a_topics_[idx], side_b2a_topic_types_[idx],
+                              transportForRule(side_b2a_transports_, idx), qos, false);
   }
 
-  auto mayUseUdp = [](const std::vector<std::string> & transports) -> bool {
+  auto mayUseUdp = [](const std::vector<std::string>& transports) -> bool {
     if (transports.empty()) {
       return true;
     }
-    for (const auto & raw : transports) {
+    for (const auto& raw : transports) {
       std::string value = raw;
-      std::transform(
-          value.begin(),
-          value.end(),
-          value.begin(),
-          [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      std::transform(value.begin(), value.end(), value.begin(),
+                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
       if (value == "udp") {
         return true;
       }
     }
     return false;
   };
-  auto mayUseShm = [](const std::vector<std::string> & transports) -> bool {
-    for (const auto & raw : transports) {
+  auto mayUseShm = [](const std::vector<std::string>& transports) -> bool {
+    for (const auto& raw : transports) {
       std::string value = raw;
-      std::transform(
-          value.begin(),
-          value.end(),
-          value.begin(),
-          [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      std::transform(value.begin(), value.end(), value.begin(),
+                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
       if (value == "shm" || value == "shared_memory" || value == "shared-memory") {
         return true;
       }
@@ -803,34 +723,31 @@ void MiddlewareBridge::setupSockets() {
     throw std::runtime_error("Failed to parse remote_host '" + remote_host_ + "' as IPv4 address.");
   }
 
-  struct sockaddr_in rx_address {};
+  struct sockaddr_in rx_address{};
   rx_address.sin_family = AF_INET;
   rx_address.sin_port = htons(static_cast<uint16_t>(rx_port_));
   rx_address.sin_addr.s_addr = htonl(INADDR_ANY);
-  if (::bind(rx_socket_fd_, reinterpret_cast<struct sockaddr *>(&rx_address), sizeof(rx_address)) != 0) {
+  if (::bind(rx_socket_fd_, reinterpret_cast<struct sockaddr*>(&rx_address), sizeof(rx_address)) != 0) {
     throw std::runtime_error("Failed to bind RX socket on port " + std::to_string(rx_port_) + ": " + std::strerror(errno));
   }
 }
 
-void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel & channel, const std::string & ns, const std::size_t channel_index) {
+void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel& channel, const std::string& ns, const std::size_t channel_index) {
   if (channel.shm_fd >= 0 && channel.shm_mapping != nullptr) {
     return;
   }
 
   const std::size_t mapping_size = sizeof(ShmChannelHeader) + static_cast<std::size_t>(max_shm_message_bytes_);
   const std::string shm_name = "/mb_" + ns + "_ch_" + std::to_string(channel_index);
-  struct statvfs shm_stats {};
+  struct statvfs shm_stats{};
   if (::statvfs("/dev/shm", &shm_stats) == 0) {
     const std::uint64_t available_bytes =
         static_cast<std::uint64_t>(shm_stats.f_bavail) * static_cast<std::uint64_t>(shm_stats.f_frsize);
     if (available_bytes < static_cast<std::uint64_t>(mapping_size)) {
-      RCLCPP_WARN(
-          this->get_logger(),
-          "Shared-memory channel '%s' requests %zu bytes, but /dev/shm has only %llu bytes available. "
-          "Consider reducing max_shm_message_bytes, using fewer SHM channels, or increasing container --shm-size.",
-          shm_name.c_str(),
-          mapping_size,
-          static_cast<unsigned long long>(available_bytes));
+      RCLCPP_WARN(this->get_logger(),
+                  "Shared-memory channel '%s' requests %zu bytes, but /dev/shm has only %llu bytes available. "
+                  "Consider reducing max_shm_message_bytes, using fewer SHM channels, or increasing container --shm-size.",
+                  shm_name.c_str(), mapping_size, static_cast<unsigned long long>(available_bytes));
     }
   }
 
@@ -845,15 +762,15 @@ void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel & channel, const s
     throw std::runtime_error(error);
   }
 
-  void * mapping = ::mmap(nullptr, mapping_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  void* mapping = ::mmap(nullptr, mapping_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (mapping == MAP_FAILED) {
     const std::string error = "Failed to map shared memory '" + shm_name + "': " + std::strerror(errno);
     ::close(fd);
     throw std::runtime_error(error);
   }
 
-  auto * header = reinterpret_cast<ShmChannelHeader *>(mapping);
-  auto * payload = reinterpret_cast<std::uint8_t *>(mapping) + sizeof(ShmChannelHeader);
+  auto* header = reinterpret_cast<ShmChannelHeader*>(mapping);
+  auto* payload = reinterpret_cast<std::uint8_t*>(mapping) + sizeof(ShmChannelHeader);
   const auto expected_capacity = static_cast<std::uint32_t>(max_shm_message_bytes_);
   const auto existing_magic = header->magic.load(std::memory_order_acquire);
   const auto existing_capacity = header->capacity_bytes.load(std::memory_order_acquire);
@@ -881,11 +798,12 @@ void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel & channel, const s
   channel.shm_last_sequence = header->sequence.load(std::memory_order_acquire);
   channel.shm_read_buffer.reserve(static_cast<std::size_t>(max_shm_message_bytes_));
 
-  RCLCPP_INFO(this->get_logger(), "Rule %zu uses shared memory '%s' (capacity=%d bytes)", channel_index, shm_name.c_str(), max_shm_message_bytes_);
+  RCLCPP_INFO(this->get_logger(), "Rule %zu uses shared memory '%s' (capacity=%d bytes)", channel_index, shm_name.c_str(),
+              max_shm_message_bytes_);
 }
 
 void MiddlewareBridge::setupSharedMemoryChannels() {
-  const auto sanitizeName = [](const std::string & raw) -> std::string {
+  const auto sanitizeName = [](const std::string& raw) -> std::string {
     std::string out;
     out.reserve(raw.size());
     for (const char c : raw) {
@@ -904,7 +822,7 @@ void MiddlewareBridge::setupSharedMemoryChannels() {
   const std::string ns = sanitizeName(shm_namespace_);
   std::lock_guard<std::mutex> lock(channels_mutex_);
   for (std::size_t channel_index = 0; channel_index < channels_.size(); ++channel_index) {
-    auto & channel = channels_[channel_index];
+    auto& channel = channels_[channel_index];
     if (channel.transport != TransportType::Shm) {
       continue;
     }
@@ -924,14 +842,14 @@ void MiddlewareBridge::refreshLocalSourceQos() {
     std::lock_guard<std::mutex> lock(channels_mutex_);
     source_channels.reserve(channels_.size());
     for (std::size_t channel_index = 0; channel_index < channels_.size(); ++channel_index) {
-      const auto & channel = channels_[channel_index];
+      const auto& channel = channels_[channel_index];
       if (!channel.subscribe_topic.empty()) {
         source_channels.push_back(SourceChannel{channel_index, channel.subscribe_topic, channel.qos.depth});
       }
     }
   }
 
-  for (const auto & channel : source_channels) {
+  for (const auto& channel : source_channels) {
     const auto qos = resolveSourceQos(channel.topic_name, channel.fallback_depth);
     updateChannelQos(channel.channel_index, qos, "source publisher graph");
   }
@@ -952,29 +870,20 @@ void MiddlewareBridge::announceStaticSourceChannels() {
     std::lock_guard<std::mutex> lock(channels_mutex_);
     static_source_channels.reserve(channels_.size());
     for (std::size_t channel_index = 0; channel_index < channels_.size(); ++channel_index) {
-      const auto & channel = channels_[channel_index];
+      const auto& channel = channels_[channel_index];
       if (channel.from_auto_discovery || channel.subscribe_topic.empty() ||
           channel_index >= static_cast<std::size_t>(kControlChannelId)) {
         continue;
       }
-      static_source_channels.push_back(StaticSourceChannel{
-          static_cast<std::uint16_t>(channel_index),
-          bridge_side_ == "a",
-          channel.subscribe_topic,
-          channel.topic_type,
-          channel.transport_name,
-          channel.qos});
+      static_source_channels.push_back(StaticSourceChannel{static_cast<std::uint16_t>(channel_index), bridge_side_ == "a",
+                                                           channel.subscribe_topic, channel.topic_type, channel.transport_name,
+                                                           channel.qos});
     }
   }
 
-  for (const auto & channel : static_source_channels) {
-    announceAutoDiscoveredChannel(
-        channel.channel_id,
-        channel.is_side_a_to_b,
-        channel.topic_name,
-        channel.topic_type,
-        channel.transport,
-        channel.qos);
+  for (const auto& channel : static_source_channels) {
+    announceAutoDiscoveredChannel(channel.channel_id, channel.is_side_a_to_b, channel.topic_name, channel.topic_type,
+                                  channel.transport, channel.qos);
   }
 }
 
@@ -986,32 +895,29 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
   const auto topic_graph = this->get_topic_names_and_types();
   std::size_t added_count = 0;
 
-  auto qosDepthForRule = [](const std::vector<int64_t> & qos_depths, std::size_t idx) -> std::size_t {
+  auto qosDepthForRule = [](const std::vector<int64_t>& qos_depths, std::size_t idx) -> std::size_t {
     const int64_t qos_depth = qos_depths.empty() ? 10 : (qos_depths.size() == 1U ? qos_depths.front() : qos_depths[idx]);
     return static_cast<std::size_t>(qos_depth);
   };
-  auto transportForRule = [](const std::vector<std::string> & transports, std::size_t idx) -> std::string {
+  auto transportForRule = [](const std::vector<std::string>& transports, std::size_t idx) -> std::string {
     if (transports.empty()) {
       return "udp";
     }
     return transports.size() == 1U ? transports.front() : transports[idx];
   };
 
-  auto scanDirection = [&](const bool enabled,
-                           const bool is_side_a_to_b,
-                           const std::string & direction_name,
-                           const std::vector<std::string> & topic_types,
-                           const std::vector<std::string> & transports,
-                           const std::vector<int64_t> & qos_depths) {
+  auto scanDirection = [&](const bool enabled, const bool is_side_a_to_b, const std::string& direction_name,
+                           const std::vector<std::string>& topic_types, const std::vector<std::string>& transports,
+                           const std::vector<int64_t>& qos_depths) {
     if (!enabled) {
       return;
     }
 
     std::unordered_set<std::string> seen_topics_this_scan;
     for (std::size_t rule_index = 0; rule_index < topic_types.size(); ++rule_index) {
-      const std::string & type_name = topic_types[rule_index];
+      const std::string& type_name = topic_types[rule_index];
       std::vector<std::string> matched_topics;
-      for (const auto & [topic_name, topic_type_list] : topic_graph) {
+      for (const auto& [topic_name, topic_type_list] : topic_graph) {
         if (std::find(topic_type_list.begin(), topic_type_list.end(), type_name) != topic_type_list.end()) {
           matched_topics.push_back(topic_name);
         }
@@ -1020,32 +926,18 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
 
       const auto transport = transportForRule(transports, rule_index);
       const auto fallback_depth = qosDepthForRule(qos_depths, rule_index);
-      for (const auto & topic_name : matched_topics) {
+      for (const auto& topic_name : matched_topics) {
         if (!seen_topics_this_scan.insert(topic_name).second) {
-          RCLCPP_WARN(
-              this->get_logger(),
-              "Skipping auto-discovered topic '%s' in %s because it matched multiple configured types.",
-              topic_name.c_str(),
-              direction_name.c_str());
+          RCLCPP_WARN(this->get_logger(),
+                      "Skipping auto-discovered topic '%s' in %s because it matched multiple configured types.",
+                      topic_name.c_str(), direction_name.c_str());
           continue;
         }
         const auto qos = resolveSourceQos(topic_name, fallback_depth);
         bool added = false;
-        const auto channel_index = addChannelIfMissing(
-            is_side_a_to_b,
-            topic_name,
-            type_name,
-            transport,
-            qos,
-            true,
-            &added);
-        announceAutoDiscoveredChannel(
-            static_cast<std::uint16_t>(channel_index),
-            is_side_a_to_b,
-            topic_name,
-            type_name,
-            transport,
-            qos);
+        const auto channel_index = addChannelIfMissing(is_side_a_to_b, topic_name, type_name, transport, qos, true, &added);
+        announceAutoDiscoveredChannel(static_cast<std::uint16_t>(channel_index), is_side_a_to_b, topic_name, type_name, transport,
+                                      qos);
         if (added) {
           added_count += 1U;
         }
@@ -1058,27 +950,17 @@ void MiddlewareBridge::runAutoDiscoveryScan() {
   const bool discover_side_a2b_locally = side_a2b_auto_discovery_ && bridge_side_ == "a";
   const bool discover_side_b2a_locally = side_b2a_auto_discovery_ && bridge_side_ == "b";
 
-  scanDirection(
-      discover_side_a2b_locally,
-      true,
-      "side_a2b",
-      side_a2b_topic_types_,
-      side_a2b_transports_,
-      side_a2b_qos_depths_);
-  scanDirection(
-      discover_side_b2a_locally,
-      false,
-      "side_b2a",
-      side_b2a_topic_types_,
-      side_b2a_transports_,
-      side_b2a_qos_depths_);
+  scanDirection(discover_side_a2b_locally, true, "side_a2b", side_a2b_topic_types_, side_a2b_transports_, side_a2b_qos_depths_);
+  scanDirection(discover_side_b2a_locally, false, "side_b2a", side_b2a_topic_types_, side_b2a_transports_, side_b2a_qos_depths_);
 
   if (added_count > 0U) {
     RCLCPP_INFO(this->get_logger(), "Auto-discovery added %zu new channel(s).", added_count);
   }
 }
 
-void MiddlewareBridge::sendUdpPayload(const std::uint16_t channel_id, const std::uint8_t * payload, const std::size_t payload_size) {
+void MiddlewareBridge::sendUdpPayload(const std::uint16_t channel_id,
+                                      const std::uint8_t* payload,
+                                      const std::size_t payload_size) {
   if (tx_socket_fd_ < 0) {
     return;
   }
@@ -1093,11 +975,8 @@ void MiddlewareBridge::sendUdpPayload(const std::uint16_t channel_id, const std:
   const std::size_t fragment_count =
       std::max<std::size_t>(1, (payload_size + max_fragment_payload_size - 1) / max_fragment_payload_size);
   if (fragment_count > static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())) {
-    RCLCPP_WARN(
-        this->get_logger(),
-        "Dropping UDP payload because required fragment count %zu exceeds limit %u.",
-        fragment_count,
-        static_cast<unsigned int>(std::numeric_limits<std::uint16_t>::max()));
+    RCLCPP_WARN(this->get_logger(), "Dropping UDP payload because required fragment count %zu exceeds limit %u.", fragment_count,
+                static_cast<unsigned int>(std::numeric_limits<std::uint16_t>::max()));
     return;
   }
 
@@ -1108,7 +987,7 @@ void MiddlewareBridge::sendUdpPayload(const std::uint16_t channel_id, const std:
     const std::size_t fragment_payload_size =
         fragment_offset < payload_size ? std::min(max_fragment_payload_size, payload_size - fragment_offset) : 0U;
 
-    PacketHeader wire_header {};
+    PacketHeader wire_header{};
     wire_header.magic = htonl(kPacketMagic);
     wire_header.version = htons(kPacketVersion);
     wire_header.channel_index = htons(channel_id);
@@ -1126,13 +1005,8 @@ void MiddlewareBridge::sendUdpPayload(const std::uint16_t channel_id, const std:
       std::memcpy(packet.data() + header_size, payload + fragment_offset, fragment_payload_size);
     }
 
-    const ssize_t bytes_sent = ::sendto(
-        tx_socket_fd_,
-        packet.data(),
-        packet.size(),
-        0,
-        reinterpret_cast<struct sockaddr *>(&tx_address_),
-        sizeof(tx_address_));
+    const ssize_t bytes_sent = ::sendto(tx_socket_fd_, packet.data(), packet.size(), 0,
+                                        reinterpret_cast<struct sockaddr*>(&tx_address_), sizeof(tx_address_));
     if (bytes_sent < 0 || static_cast<std::size_t>(bytes_sent) != packet.size()) {
       RCLCPP_WARN(this->get_logger(), "Failed UDP send for channel %u: %s", channel_id, std::strerror(errno));
       return;
@@ -1142,20 +1016,17 @@ void MiddlewareBridge::sendUdpPayload(const std::uint16_t channel_id, const std:
 
 void MiddlewareBridge::announceAutoDiscoveredChannel(const std::uint16_t channel_id,
                                                      const bool is_side_a_to_b,
-                                                     const std::string & topic_name,
-                                                     const std::string & topic_type,
-                                                     const std::string & transport,
-                                                     const BridgeQosProfile & qos) {
+                                                     const std::string& topic_name,
+                                                     const std::string& topic_type,
+                                                     const std::string& transport,
+                                                     const BridgeQosProfile& qos) {
   if (tx_socket_fd_ < 0) {
     return;
   }
 
   std::string normalized_transport = transport;
-  std::transform(
-      normalized_transport.begin(),
-      normalized_transport.end(),
-      normalized_transport.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(normalized_transport.begin(), normalized_transport.end(), normalized_transport.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (normalized_transport == "shared_memory" || normalized_transport == "shared-memory") {
     normalized_transport = "shm";
   }
@@ -1165,15 +1036,15 @@ void MiddlewareBridge::announceAutoDiscoveredChannel(const std::uint16_t channel
                               std::to_string(static_cast<int>(qos.reliability)) + "|" +
                               std::to_string(static_cast<int>(qos.durability)) + "|" +
                               std::to_string(static_cast<int>(qos.history)) + "|" + topic_name + "|" + topic_type;
-  sendUdpPayload(kControlChannelId, reinterpret_cast<const std::uint8_t *>(payload.data()), payload.size());
+  sendUdpPayload(kControlChannelId, reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size());
 }
 
-void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payload, const std::size_t payload_size) {
+void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t* payload, const std::size_t payload_size) {
   if (payload == nullptr || payload_size == 0U) {
     return;
   }
 
-  const std::string message(reinterpret_cast<const char *>(payload), payload_size);
+  const std::string message(reinterpret_cast<const char*>(payload), payload_size);
   std::vector<std::string> fields;
   fields.reserve(10);
   std::size_t begin = 0U;
@@ -1212,9 +1083,9 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
     return;
   }
 
-  const std::string & transport = fields[3];
-  const std::string & topic_name = fields[8];
-  const std::string & topic_type = fields[9];
+  const std::string& transport = fields[3];
+  const std::string& topic_name = fields[8];
+  const std::string& topic_type = fields[9];
   if (topic_name.empty() || topic_type.empty()) {
     return;
   }
@@ -1230,14 +1101,7 @@ void MiddlewareBridge::handleAutoDiscoveryAnnouncement(const std::uint8_t * payl
   }
 
   bool added = false;
-  const auto local_channel_index = addChannelIfMissing(
-      is_side_a_to_b,
-      topic_name,
-      topic_type,
-      transport,
-      qos,
-      true,
-      &added);
+  const auto local_channel_index = addChannelIfMissing(is_side_a_to_b, topic_name, topic_type, transport, qos, true, &added);
   {
     std::lock_guard<std::mutex> lock(channels_mutex_);
     remote_channel_to_local_index_[remote_channel_index] = local_channel_index;
@@ -1254,7 +1118,8 @@ void MiddlewareBridge::receiverLoop() {
   };
 
   const std::size_t header_size = sizeof(PacketHeader);
-  const std::size_t receive_buffer_size = static_cast<std::size_t>(std::max(4096, std::max(socket_buffer_bytes_, max_udp_payload_bytes_)));
+  const std::size_t receive_buffer_size =
+      static_cast<std::size_t>(std::max(4096, std::max(socket_buffer_bytes_, max_udp_payload_bytes_)));
   std::vector<std::uint8_t> receive_buffer(receive_buffer_size);
   std::unordered_map<std::uint64_t, ReassemblyState> reassembly_states;
   std::size_t received_datagrams = 0;
@@ -1271,14 +1136,14 @@ void MiddlewareBridge::receiverLoop() {
     }
   };
 
-  auto publish_serialized = [this](std::size_t channel_index, const std::uint8_t * data, std::size_t size) {
+  auto publish_serialized = [this](std::size_t channel_index, const std::uint8_t* data, std::size_t size) {
     rclcpp::GenericPublisher::SharedPtr publisher;
     {
       std::lock_guard<std::mutex> lock(channels_mutex_);
       if (channel_index >= channels_.size()) {
         return;
       }
-      auto & channel = channels_[channel_index];
+      auto& channel = channels_[channel_index];
       if (!channel.publisher || channel.transport != TransportType::Udp) {
         return;
       }
@@ -1286,7 +1151,7 @@ void MiddlewareBridge::receiverLoop() {
     }
 
     rclcpp::SerializedMessage serialized_message(size);
-    auto & rcl_serialized = serialized_message.get_rcl_serialized_message();
+    auto& rcl_serialized = serialized_message.get_rcl_serialized_message();
     if (size > 0U) {
       std::memcpy(rcl_serialized.buffer, data, size);
     }
@@ -1294,7 +1159,7 @@ void MiddlewareBridge::receiverLoop() {
     publisher->publish(serialized_message);
   };
 
-  struct sockaddr_in source_address {};
+  struct sockaddr_in source_address{};
   socklen_t source_length = sizeof(source_address);
 
   while (receiver_running_.load() && rclcpp::ok()) {
@@ -1303,8 +1168,8 @@ void MiddlewareBridge::receiverLoop() {
     }
 
     source_length = sizeof(source_address);
-    const ssize_t received_bytes =
-        ::recvfrom(rx_socket_fd_, receive_buffer.data(), receive_buffer.size(), 0, reinterpret_cast<struct sockaddr *>(&source_address), &source_length);
+    const ssize_t received_bytes = ::recvfrom(rx_socket_fd_, receive_buffer.data(), receive_buffer.size(), 0,
+                                              reinterpret_cast<struct sockaddr*>(&source_address), &source_length);
 
     if (received_bytes < 0) {
       if (!receiver_running_.load()) {
@@ -1322,7 +1187,7 @@ void MiddlewareBridge::receiverLoop() {
       continue;
     }
 
-    PacketHeader wire_header {};
+    PacketHeader wire_header{};
     std::memcpy(&wire_header, receive_buffer.data(), header_size);
     const auto magic = ntohl(wire_header.magic);
     const auto version = ntohs(wire_header.version);
@@ -1375,7 +1240,8 @@ void MiddlewareBridge::receiverLoop() {
       continue;
     }
 
-    const std::uint64_t fragment_end_offset = static_cast<std::uint64_t>(fragment_offset) + static_cast<std::uint64_t>(fragment_payload_size);
+    const std::uint64_t fragment_end_offset =
+        static_cast<std::uint64_t>(fragment_offset) + static_cast<std::uint64_t>(fragment_payload_size);
     if (fragment_end_offset > static_cast<std::uint64_t>(total_payload_size)) {
       RCLCPP_WARN(this->get_logger(), "Dropped packet with invalid payload bounds.");
       continue;
@@ -1383,15 +1249,12 @@ void MiddlewareBridge::receiverLoop() {
 
     const auto expected_size = header_size + static_cast<std::size_t>(fragment_payload_size);
     if (static_cast<std::size_t>(received_bytes) != expected_size) {
-      RCLCPP_WARN(
-          this->get_logger(),
-          "Dropped packet with invalid fragment size: declared=%u bytes total_received=%zd",
-          fragment_payload_size,
-          received_bytes);
+      RCLCPP_WARN(this->get_logger(), "Dropped packet with invalid fragment size: declared=%u bytes total_received=%zd",
+                  fragment_payload_size, received_bytes);
       continue;
     }
 
-    const std::uint8_t * fragment_data = receive_buffer.data() + header_size;
+    const std::uint8_t* fragment_data = receive_buffer.data() + header_size;
 
     if (fragment_count == 1U) {
       if (fragment_index != 0U || fragment_offset != 0U || total_payload_size != fragment_payload_size) {
@@ -1402,8 +1265,9 @@ void MiddlewareBridge::receiverLoop() {
       continue;
     }
 
-    const std::uint64_t reassembly_key = (static_cast<std::uint64_t>(channel_index) << 32U) | static_cast<std::uint64_t>(message_id);
-    auto & state = reassembly_states[reassembly_key];
+    const std::uint64_t reassembly_key =
+        (static_cast<std::uint64_t>(channel_index) << 32U) | static_cast<std::uint64_t>(message_id);
+    auto& state = reassembly_states[reassembly_key];
     if (state.payload.size() != total_payload_size || state.fragment_received.size() != fragment_count) {
       state.payload.assign(total_payload_size, 0U);
       state.fragment_received.assign(fragment_count, 0U);
@@ -1414,10 +1278,7 @@ void MiddlewareBridge::receiverLoop() {
 
     if (state.fragment_received[fragment_index] == 0U) {
       if (fragment_payload_size > 0U) {
-        std::memcpy(
-            state.payload.data() + fragment_offset,
-            fragment_data,
-            fragment_payload_size);
+        std::memcpy(state.payload.data() + fragment_offset, fragment_data, fragment_payload_size);
       }
       state.fragment_received[fragment_index] = 1U;
       state.fragments_received += 1U;
@@ -1442,8 +1303,9 @@ void MiddlewareBridge::shmReceiverLoop() {
     {
       std::lock_guard<std::mutex> lock(channels_mutex_);
       for (std::size_t channel_index = 0; channel_index < channels_.size(); ++channel_index) {
-        auto & channel = channels_[channel_index];
-        if (channel.transport != TransportType::Shm || !channel.publisher || channel.shm_header == nullptr || channel.shm_payload == nullptr) {
+        auto& channel = channels_[channel_index];
+        if (channel.transport != TransportType::Shm || !channel.publisher || channel.shm_header == nullptr ||
+            channel.shm_payload == nullptr) {
           continue;
         }
 
@@ -1454,12 +1316,9 @@ void MiddlewareBridge::shmReceiverLoop() {
 
         const std::uint32_t payload_size = channel.shm_header->payload_size.load(std::memory_order_acquire);
         if (payload_size > static_cast<std::uint32_t>(max_shm_message_bytes_)) {
-          RCLCPP_WARN(
-              this->get_logger(),
-              "Dropping SHM message on channel %zu because payload_size=%u exceeds max_shm_message_bytes=%d.",
-              channel_index,
-              payload_size,
-              max_shm_message_bytes_);
+          RCLCPP_WARN(this->get_logger(),
+                      "Dropping SHM message on channel %zu because payload_size=%u exceeds max_shm_message_bytes=%d.",
+                      channel_index, payload_size, max_shm_message_bytes_);
           channel.shm_last_sequence = sequence_begin;
           continue;
         }
@@ -1483,9 +1342,9 @@ void MiddlewareBridge::shmReceiverLoop() {
       }
     }
 
-    for (auto & pending : pending_publishes) {
+    for (auto& pending : pending_publishes) {
       rclcpp::SerializedMessage serialized_message(pending.payload.size());
-      auto & rcl_serialized = serialized_message.get_rcl_serialized_message();
+      auto& rcl_serialized = serialized_message.get_rcl_serialized_message();
       if (!pending.payload.empty()) {
         std::memcpy(rcl_serialized.buffer, pending.payload.data(), pending.payload.size());
       }
@@ -1498,13 +1357,13 @@ void MiddlewareBridge::shmReceiverLoop() {
 }
 
 bool MiddlewareBridge::aggregateTfStaticMessage(std::size_t channel_index,
-                                                rclcpp::SerializedMessage & message,
-                                                rclcpp::SerializedMessage & aggregated_message) {
+                                                rclcpp::SerializedMessage& message,
+                                                rclcpp::SerializedMessage& aggregated_message) {
   tf2_msgs::msg::TFMessage incoming;
   rclcpp::Serialization<tf2_msgs::msg::TFMessage> serializer;
   try {
     serializer.deserialize_message(&message, &incoming);
-  } catch (const std::exception & ex) {
+  } catch (const std::exception& ex) {
     RCLCPP_WARN(this->get_logger(), "Dropping /tf_static message that could not be deserialized: %s", ex.what());
     return false;
   }
@@ -1516,13 +1375,13 @@ bool MiddlewareBridge::aggregateTfStaticMessage(std::size_t channel_index,
       return false;
     }
 
-    auto & channel = channels_[channel_index];
+    auto& channel = channels_[channel_index];
     if (!isTfStaticTopic(channel.subscribe_topic)) {
       return false;
     }
 
-    for (const auto & transform : incoming.transforms) {
-      const auto & child_frame_id = transform.child_frame_id;
+    for (const auto& transform : incoming.transforms) {
+      const auto& child_frame_id = transform.child_frame_id;
       if (child_frame_id.empty()) {
         continue;
       }
@@ -1533,7 +1392,7 @@ bool MiddlewareBridge::aggregateTfStaticMessage(std::size_t channel_index,
     }
 
     aggregate.transforms.reserve(channel.tf_static_order.size());
-    for (const auto & child_frame_id : channel.tf_static_order) {
+    for (const auto& child_frame_id : channel.tf_static_order) {
       const auto it = channel.tf_static_transforms.find(child_frame_id);
       if (it != channel.tf_static_transforms.end()) {
         aggregate.transforms.push_back(it->second);
@@ -1545,10 +1404,10 @@ bool MiddlewareBridge::aggregateTfStaticMessage(std::size_t channel_index,
   return true;
 }
 
-void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcpp::SerializedMessage & message) {
+void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcpp::SerializedMessage& message) {
   TransportType transport = TransportType::Udp;
-  ShmChannelHeader * shm_header = nullptr;
-  std::uint8_t * shm_payload = nullptr;
+  ShmChannelHeader* shm_header = nullptr;
+  std::uint8_t* shm_payload = nullptr;
   bool aggregate_tf_static = false;
 
   {
@@ -1563,7 +1422,7 @@ void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcp
   }
 
   rclcpp::SerializedMessage aggregated_message;
-  auto * outgoing_message = &message;
+  auto* outgoing_message = &message;
   if (aggregate_tf_static) {
     if (!aggregateTfStaticMessage(channel_index, message, aggregated_message)) {
       return;
@@ -1571,7 +1430,7 @@ void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcp
     outgoing_message = &aggregated_message;
   }
 
-  const auto & rcl_serialized = outgoing_message->get_rcl_serialized_message();
+  const auto& rcl_serialized = outgoing_message->get_rcl_serialized_message();
   const std::size_t payload_size = rcl_serialized.buffer_length;
   if (payload_size > static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
     RCLCPP_WARN(this->get_logger(), "Dropping oversized serialized message (%zu bytes).", payload_size);
@@ -1580,16 +1439,13 @@ void MiddlewareBridge::forwardSerializedMessage(std::size_t channel_index, rclcp
 
   if (transport == TransportType::Shm) {
     if (shm_header == nullptr || shm_payload == nullptr) {
-      RCLCPP_WARN(this->get_logger(), "Dropping SHM message on channel %zu because SHM channel is not initialized.", channel_index);
+      RCLCPP_WARN(this->get_logger(), "Dropping SHM message on channel %zu because SHM channel is not initialized.",
+                  channel_index);
       return;
     }
     if (payload_size > static_cast<std::size_t>(max_shm_message_bytes_)) {
-      RCLCPP_WARN(
-          this->get_logger(),
-          "Dropping SHM message on channel %zu because size=%zu exceeds max_shm_message_bytes=%d.",
-          channel_index,
-          payload_size,
-          max_shm_message_bytes_);
+      RCLCPP_WARN(this->get_logger(), "Dropping SHM message on channel %zu because size=%zu exceeds max_shm_message_bytes=%d.",
+                  channel_index, payload_size, max_shm_message_bytes_);
       return;
     }
 
@@ -1644,7 +1500,7 @@ void MiddlewareBridge::stopBackgroundThreads() {
 
 void MiddlewareBridge::closeSharedMemoryChannels() {
   std::lock_guard<std::mutex> lock(channels_mutex_);
-  for (auto & channel : channels_) {
+  for (auto& channel : channels_) {
     if (channel.shm_mapping != nullptr && channel.shm_mapping_size > 0U) {
       ::munmap(channel.shm_mapping, channel.shm_mapping_size);
       channel.shm_mapping = nullptr;
@@ -1661,7 +1517,7 @@ void MiddlewareBridge::closeSharedMemoryChannels() {
 
 }  // namespace ros_middleware_bridge
 
-int main(int argc, char * argv[]) {
+int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
 
   auto node = std::make_shared<ros_middleware_bridge::MiddlewareBridge>();

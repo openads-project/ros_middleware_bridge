@@ -3,8 +3,8 @@
 <package format="3">
 
   <name>ros_middleware_bridge</name>
-  <version>0.0.0</version>
-  <description>Generic ROS 2 middleware bridge using serialized topic forwarding between two processes.</description>
+  <version>1.2.0</version>
+  <description>ROS 2 middleware bridge serializing topic data between different RMW implementations .</description>
 
   <maintainer email="christian.geller@ika.rwth-aachen.de">christian.geller@ika.rwth-aachen.de</maintainer>
   <author email="christian.geller@ika.rwth-aachen.de">christian.geller@ika.rwth-aachen.de</author>

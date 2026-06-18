@@ -11,13 +11,16 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
+    """Generate a launch description for ros_middleware_bridge."""
     package_share = get_package_share_directory("ros_middleware_bridge")
     default_params = os.path.join(package_share, "config", "params.yml")
 
     launch_args = [
         DeclareLaunchArgument("params_file", default_value=default_params, description="parameter file path"),
         DeclareLaunchArgument("namespace", default_value="", description="node namespace"),
-        DeclareLaunchArgument("log_level", default_value="info", description="ROS logging level (debug, info, warn, error, fatal)"),
+        DeclareLaunchArgument(
+            "log_level", default_value="info", description="ROS logging level (debug, info, warn, error, fatal)"
+        ),
         DeclareLaunchArgument("use_sim_time", default_value="false", description="use simulation clock"),
         DeclareLaunchArgument("side_a_name", default_value="bridge_fast", description="side A node name (default Fast DDS side)"),
         DeclareLaunchArgument("side_b_name", default_value="bridge_zenoh", description="side B node name (default Zenoh side)"),
@@ -76,8 +79,10 @@ def generate_launch_description():
         ),
     ]
 
-    return LaunchDescription([
-        *launch_args,
-        SetParameter("use_sim_time", LaunchConfiguration("use_sim_time")),
-        *nodes,
-    ])
+    return LaunchDescription(
+        [
+            *launch_args,
+            SetParameter("use_sim_time", LaunchConfiguration("use_sim_time")),
+            *nodes,
+        ]
+    )
