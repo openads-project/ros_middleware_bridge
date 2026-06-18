@@ -46,7 +46,7 @@ bool isTfTopic(const std::string& topic_name) {
 
 MiddlewareBridge::MiddlewareBridge() : Node("ros_middleware_bridge") {
   try {
-    declareAndLoadParameters();
+    this->declareAndLoadParameters();
     setupBridgeChannels();
 
     if (use_udp_transport_) {
@@ -100,9 +100,12 @@ MiddlewareBridge::~MiddlewareBridge() {
 
 void MiddlewareBridge::declareAndLoadParameters() {
   auto declare_string_array_parameter = [this](const std::string& name, const std::vector<std::string>& default_value,
+                                               const std::string& description,
                                                bool fallback_to_empty_on_unset) -> std::vector<std::string> {
+    auto value = default_value;
     try {
-      return this->declare_parameter<std::vector<std::string>>(name, default_value);
+      this->declareAndLoadParameter(name, value, description);
+      return value;
     } catch (const rclcpp::exceptions::InvalidParameterValueException& ex) {
       const std::string message = ex.what();
       if (fallback_to_empty_on_unset && message.find("No parameter value set") != std::string::npos) {
@@ -113,19 +116,35 @@ void MiddlewareBridge::declareAndLoadParameters() {
     }
   };
 
-  num_threads_ = this->declare_parameter<int>("num_threads", 1);
-  const auto bridge_side_param = this->declare_parameter<std::string>("bridge_side", "a");
-  remote_host_ = this->declare_parameter<std::string>("remote_host", "127.0.0.1");
-  shm_namespace_ = this->declare_parameter<std::string>("shm_namespace", "ros_middleware_bridge");
-  tx_port_ = this->declare_parameter<int>("tx_port", 17001);
-  rx_port_ = this->declare_parameter<int>("rx_port", 17002);
-  socket_buffer_bytes_ = this->declare_parameter<int>("socket_buffer_bytes", 1024 * 1024);
-  max_udp_payload_bytes_ = this->declare_parameter<int>("max_udp_payload_bytes", 60000);
-  max_shm_message_bytes_ = this->declare_parameter<int>("max_shm_message_bytes", 8 * 1024 * 1024);
-  shm_poll_interval_us_ = this->declare_parameter<int>("shm_poll_interval_us", 1000);
-  reassembly_timeout_ms_ = this->declare_parameter<int>("reassembly_timeout_ms", 1000);
-  auto_discovery_wait_ms_ = this->declare_parameter<int>("auto_discovery_wait_ms", 0);
-  auto_discovery_poll_ms_ = this->declare_parameter<int>("auto_discovery_poll_ms", 1000);
+  this->declareAndLoadParameter("num_threads", num_threads_, "Number of threads used by the rclcpp MultiThreadedExecutor",
+                                false, false, false, 1.0, 128.0);
+  this->declareAndLoadParameter("bridge_side", bridge_side_, "Bridge side selector: a or b");
+  this->declareAndLoadParameter("remote_host", remote_host_, "IPv4 destination used for UDP sends");
+  this->declareAndLoadParameter("shm_namespace", shm_namespace_, "Namespace prefix used for shared-memory channel names");
+  this->declareAndLoadParameter("tx_port", tx_port_, "UDP transmit port", false, false, false, 1.0, 65535.0);
+  this->declareAndLoadParameter("rx_port", rx_port_, "UDP receive port", false, false, false, 1.0, 65535.0);
+  this->declareAndLoadParameter("socket_buffer_bytes", socket_buffer_bytes_, "UDP socket send/receive buffer size in bytes",
+                                false, false, false, 1.0, static_cast<double>(std::numeric_limits<int>::max()));
+  this->declareAndLoadParameter(
+      "max_udp_payload_bytes", max_udp_payload_bytes_,
+      "Maximum UDP datagram payload per fragment, including the bridge fragment header", false, false, false,
+      static_cast<double>(sizeof(PacketHeader) + 1U), static_cast<double>(kMaxUdpDatagramBytes));
+  this->declareAndLoadParameter("max_shm_message_bytes", max_shm_message_bytes_,
+                                "Maximum message size per shared-memory channel in bytes", false, false, false, 1.0,
+                                static_cast<double>(std::numeric_limits<int>::max()));
+  this->declareAndLoadParameter("shm_poll_interval_us", shm_poll_interval_us_,
+                                "Poll interval for the shared-memory receiver loop in microseconds", false, false, false, 1.0,
+                                static_cast<double>(std::numeric_limits<int>::max()));
+  this->declareAndLoadParameter("reassembly_timeout_ms", reassembly_timeout_ms_,
+                                "Timeout for incomplete UDP fragment reassembly in milliseconds", false, false, false, 1.0,
+                                static_cast<double>(std::numeric_limits<int>::max()));
+  this->declareAndLoadParameter(
+      "auto_discovery_wait_ms", auto_discovery_wait_ms_,
+      "Optional wait before the initial auto-discovery scan in milliseconds; 0 disables the wait", false, false, false, 0.0,
+      static_cast<double>(std::numeric_limits<int>::max()));
+  this->declareAndLoadParameter("auto_discovery_poll_ms", auto_discovery_poll_ms_,
+                                "Poll interval for runtime auto-discovery scans in milliseconds", false, false, false, 1.0,
+                                static_cast<double>(std::numeric_limits<int>::max()));
 
   auto canonical_bridge_side = [](std::string value, const std::string& parameter_name) -> std::string {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -141,7 +160,7 @@ void MiddlewareBridge::declareAndLoadParameters() {
     throw std::runtime_error("Parameter '" + parameter_name + "' must resolve to side A or side B (e.g. a, side_a, b, side_b).");
   };
 
-  bridge_side_ = canonical_bridge_side(bridge_side_param, "bridge_side");
+  bridge_side_ = canonical_bridge_side(bridge_side_, "bridge_side");
 
   struct DirectionParameters {
     std::vector<std::string> topics;
@@ -150,16 +169,32 @@ void MiddlewareBridge::declareAndLoadParameters() {
     std::vector<int64_t> qos_depths;
   };
 
-  const DirectionParameters side_a2b_config{
-      declare_string_array_parameter("side_a2b.topics", std::vector<std::string>{}, true),
-      declare_string_array_parameter("side_a2b.topic_types", std::vector<std::string>{}, false),
-      declare_string_array_parameter("side_a2b.transports", std::vector<std::string>{}, false),
-      this->declare_parameter<std::vector<int64_t>>("side_a2b.qos_depths", std::vector<int64_t>{})};
-  const DirectionParameters side_b2a_config{
-      declare_string_array_parameter("side_b2a.topics", std::vector<std::string>{}, true),
-      declare_string_array_parameter("side_b2a.topic_types", std::vector<std::string>{}, false),
-      declare_string_array_parameter("side_b2a.transports", std::vector<std::string>{}, false),
-      this->declare_parameter<std::vector<int64_t>>("side_b2a.qos_depths", std::vector<int64_t>{})};
+  DirectionParameters side_a2b_config{
+      declare_string_array_parameter("side_a2b.topics", std::vector<std::string>{},
+                                     "Side A to side B topics; explicit topics in static mode or __auto__ for auto-discovery",
+                                     true),
+      declare_string_array_parameter("side_a2b.topic_types", std::vector<std::string>{},
+                                     "Side A to side B message types; one type per topic or auto-discovery type filters",
+                                     false),
+      declare_string_array_parameter("side_a2b.transports", std::vector<std::string>{},
+                                     "Side A to side B transport selection per topic/type: udp or shm", false),
+      side_a2b_qos_depths_};
+  this->declareAndLoadParameter("side_a2b.qos_depths", side_a2b_qos_depths_,
+                                "Side A to side B minimum/fallback QoS KeepLast depth per topic/type");
+  side_a2b_config.qos_depths = side_a2b_qos_depths_;
+  DirectionParameters side_b2a_config{
+      declare_string_array_parameter("side_b2a.topics", std::vector<std::string>{},
+                                     "Side B to side A topics; explicit topics in static mode or __auto__ for auto-discovery",
+                                     true),
+      declare_string_array_parameter("side_b2a.topic_types", std::vector<std::string>{},
+                                     "Side B to side A message types; one type per topic or auto-discovery type filters",
+                                     false),
+      declare_string_array_parameter("side_b2a.transports", std::vector<std::string>{},
+                                     "Side B to side A transport selection per topic/type: udp or shm", false),
+      side_b2a_qos_depths_};
+  this->declareAndLoadParameter("side_b2a.qos_depths", side_b2a_qos_depths_,
+                                "Side B to side A minimum/fallback QoS KeepLast depth per topic/type");
+  side_b2a_config.qos_depths = side_b2a_qos_depths_;
 
   side_a2b_topics_ = side_a2b_config.topics;
   side_a2b_topic_types_ = side_a2b_config.topic_types;

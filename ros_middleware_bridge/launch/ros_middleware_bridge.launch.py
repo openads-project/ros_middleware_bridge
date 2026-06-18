@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Copyright Institute for Automotive Engineering (ika), RWTH Aachen University
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 
 from ament_index_python import get_package_share_directory
@@ -23,19 +26,19 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("use_sim_time", default_value="false", description="use simulation clock"),
         DeclareLaunchArgument("side_a_name", default_value="bridge_fast", description="side A node name (default Fast DDS side)"),
-        DeclareLaunchArgument("side_b_name", default_value="bridge_zenoh", description="side B node name (default Zenoh side)"),
         DeclareLaunchArgument(
             "side_a_rmw_implementation",
             default_value="rmw_fastrtps_cpp",
             description="RMW_IMPLEMENTATION for side A (project default: Fast DDS)",
         ),
+        DeclareLaunchArgument("side_a_tx_port", default_value="17001", description="UDP transmit port for side A"),
+        DeclareLaunchArgument("side_a_rx_port", default_value="17002", description="UDP receive port for side A"),
+        DeclareLaunchArgument("side_b_name", default_value="bridge_zenoh", description="side B node name (default Zenoh side)"),
         DeclareLaunchArgument(
             "side_b_rmw_implementation",
             default_value="rmw_zenoh_cpp",
             description="RMW_IMPLEMENTATION for side B (project default: Zenoh)",
         ),
-        DeclareLaunchArgument("side_a_tx_port", default_value="17001", description="UDP transmit port for side A"),
-        DeclareLaunchArgument("side_a_rx_port", default_value="17002", description="UDP receive port for side A"),
         DeclareLaunchArgument("side_b_tx_port", default_value="17002", description="UDP transmit port for side B"),
         DeclareLaunchArgument("side_b_rx_port", default_value="17001", description="UDP receive port for side B"),
     ]

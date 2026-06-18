@@ -87,6 +87,32 @@ class MiddlewareBridge : public rclcpp::Node {
     std::atomic<std::uint32_t> reserved{0};
   };
 
+  /**
+   * @brief Declares and loads a ROS parameter
+   *
+   * @param[in] name name
+   * @param[in] param parameter variable to load into
+   * @param[in] description description
+   * @param[in] add_to_auto_reconfigurable_params enable reconfiguration of parameter
+   * @param[in] is_required whether failure to load parameter will stop node
+   * @param[in] read_only set parameter to read-only
+   * @param[in] from_value parameter range minimum
+   * @param[in] to_value parameter range maximum
+   * @param[in] step_value parameter range step
+   * @param[in] additional_constraints additional constraints description
+   */
+  template <typename T>
+  void declareAndLoadParameter(const std::string& name,
+                               T& param,
+                               const std::string& description,
+                               const bool add_to_auto_reconfigurable_params = true,
+                               const bool is_required = false,
+                               const bool read_only = false,
+                               const std::optional<double>& from_value = std::nullopt,
+                               const std::optional<double>& to_value = std::nullopt,
+                               const std::optional<double>& step_value = std::nullopt,
+                               const std::string& additional_constraints = "");
+
   void declareAndLoadParameters();
   void setupBridgeChannels();
   void setupSockets();
