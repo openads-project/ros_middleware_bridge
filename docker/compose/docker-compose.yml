@@ -1,25 +1,23 @@
 services:
 
   ros-middleware-bridge:
-    image: ghcr.io/openads-project/ros_middleware_bridge:v1.1.0
+    image: ghcr.io/openads-project/ros_middleware_bridge:v1.2.0
     environment:
       # --- name ------
       NAMESPACE: /
       NAME: ros_middleware_bridge
-      # --- side a ---
-      SIDE_A_NAME: ${SIDE_A_NAME:-bridge_fast}
-      SIDE_A_RMW_IMPLEMENTATION: ${SIDE_A_RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
-      SIDE_A_TX_PORT: ${SIDE_A_TX_PORT:-17001}
-      SIDE_A_RX_PORT: ${SIDE_A_RX_PORT:-17002}
-      # --- side b ---
-      SIDE_B_NAME: ${SIDE_B_NAME:-bridge_zenoh}
-      SIDE_B_RMW_IMPLEMENTATION: ${SIDE_B_RMW_IMPLEMENTATION:-rmw_zenoh_cpp}
-      SIDE_B_TX_PORT: ${SIDE_B_TX_PORT:-17002}
-      SIDE_B_RX_PORT: ${SIDE_B_RX_PORT:-17001}
       # --- other -----
       LOG_LEVEL: ${LOG_LEVEL:-info}
       USE_SIM_TIME: ${USE_SIM_TIME:-false}
       PARAMS: ${PARAMS:-/docker-ros/ws/install/ros_middleware_bridge/share/ros_middleware_bridge/config/params.yml}
+      SIDE_A_NAME: ${SIDE_A_NAME:-bridge_fast}
+      SIDE_A_RMW_IMPLEMENTATION: ${SIDE_A_RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      SIDE_A_TX_PORT: ${SIDE_A_TX_PORT:-17001}
+      SIDE_A_RX_PORT: ${SIDE_A_RX_PORT:-17002}
+      SIDE_B_NAME: ${SIDE_B_NAME:-bridge_zenoh}
+      SIDE_B_RMW_IMPLEMENTATION: ${SIDE_B_RMW_IMPLEMENTATION:-rmw_zenoh_cpp}
+      SIDE_B_TX_PORT: ${SIDE_B_TX_PORT:-17002}
+      SIDE_B_RX_PORT: ${SIDE_B_RX_PORT:-17001}
     command:
       - /bin/bash
       - -ic
@@ -37,3 +35,5 @@ services:
           side_b_rmw_implementation:=$${SIDE_B_RMW_IMPLEMENTATION} \
           side_b_tx_port:=$${SIDE_B_TX_PORT} \
           side_b_rx_port:=$${SIDE_B_RX_PORT}
+    # volumes:
+    #   - ./params.yml:/docker-ros/ws/install/ros_middleware_bridge/share/ros_middleware_bridge/config/params.yml

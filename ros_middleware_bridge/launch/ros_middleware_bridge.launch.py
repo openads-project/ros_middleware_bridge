@@ -15,11 +15,14 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     """Generate a launch description for ros_middleware_bridge."""
-    package_share = get_package_share_directory("ros_middleware_bridge")
-    default_params = os.path.join(package_share, "config", "params.yml")
+    remappable_topics = []
 
-    launch_args = [
-        DeclareLaunchArgument("params_file", default_value=default_params, description="parameter file path"),
+    args = [
+        DeclareLaunchArgument(
+            "params",
+            default_value=os.path.join(get_package_share_directory("ros_middleware_bridge"), "config", "params.yml"),
+            description="path to parameter file",
+        ),
         DeclareLaunchArgument("namespace", default_value="", description="node namespace"),
         DeclareLaunchArgument(
             "log_level", default_value="info", description="ROS logging level (debug, info, warn, error, fatal)"
@@ -41,6 +44,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("side_b_tx_port", default_value="17002", description="UDP transmit port for side B"),
         DeclareLaunchArgument("side_b_rx_port", default_value="17001", description="UDP receive port for side B"),
+        *remappable_topics,
     ]
 
     nodes = [
@@ -50,7 +54,7 @@ def generate_launch_description():
             namespace=LaunchConfiguration("namespace"),
             name=LaunchConfiguration("side_a_name"),
             parameters=[
-                LaunchConfiguration("params_file"),
+                LaunchConfiguration("params"),
                 {
                     "bridge_side": "a",
                     "tx_port": ParameterValue(LaunchConfiguration("side_a_tx_port"), value_type=int),
@@ -68,7 +72,7 @@ def generate_launch_description():
             namespace=LaunchConfiguration("namespace"),
             name=LaunchConfiguration("side_b_name"),
             parameters=[
-                LaunchConfiguration("params_file"),
+                LaunchConfiguration("params"),
                 {
                     "bridge_side": "b",
                     "tx_port": ParameterValue(LaunchConfiguration("side_b_tx_port"), value_type=int),
@@ -84,7 +88,7 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            *launch_args,
+            *args,
             SetParameter("use_sim_time", LaunchConfiguration("use_sim_time")),
             *nodes,
         ]

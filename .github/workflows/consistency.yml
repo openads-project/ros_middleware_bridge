@@ -9,6 +9,4 @@ on:
 jobs:
   consistency:
     uses: openads-project/openads-dev-environment/.github/workflows/consistency.yml@main
-    with:
-      skip-checks: compose_generator_is_idempotent
     secrets: inherit
