@@ -9,8 +9,10 @@
 #include <chrono>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -21,6 +23,9 @@
 #include <sys/statvfs.h>
 #include <unistd.h>
 
+#include <rcl_interfaces/msg/floating_point_range.hpp>
+#include <rcl_interfaces/msg/integer_range.hpp>
+#include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <rclcpp/serialization.hpp>
 #include <ros_middleware_bridge/ros_middleware_bridge.hpp>
 
@@ -97,6 +102,104 @@ MiddlewareBridge::~MiddlewareBridge() {
   stopBackgroundThreads();
   closeSharedMemoryChannels();
 }
+
+template <typename T>
+void MiddlewareBridge::declareAndLoadParameter(const std::string& name,
+                                               T& param,
+                                               const std::string& description,
+                                               const bool add_to_auto_reconfigurable_params,
+                                               const bool is_required,
+                                               const bool read_only,
+                                               const std::optional<double>& from_value,
+                                               const std::optional<double>& to_value,
+                                               const std::optional<double>& step_value,
+                                               const std::string& additional_constraints) {
+  (void)add_to_auto_reconfigurable_params;
+
+  rcl_interfaces::msg::ParameterDescriptor param_desc;
+  param_desc.description = description;
+  param_desc.additional_constraints = additional_constraints;
+  param_desc.read_only = read_only;
+
+  if (from_value.has_value() && to_value.has_value()) {
+    if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool>) {
+      rcl_interfaces::msg::IntegerRange range;
+      range.set__from_value(static_cast<std::int64_t>(from_value.value()))
+          .set__to_value(static_cast<std::int64_t>(to_value.value()));
+      if (step_value.has_value()) {
+        range.set__step(static_cast<std::uint64_t>(step_value.value()));
+      }
+      param_desc.integer_range = {range};
+    } else if constexpr (std::is_floating_point_v<T>) {
+      rcl_interfaces::msg::FloatingPointRange range;
+      range.set__from_value(static_cast<T>(from_value.value())).set__to_value(static_cast<T>(to_value.value()));
+      if (step_value.has_value()) {
+        range.set__step(static_cast<T>(step_value.value()));
+      }
+      param_desc.floating_point_range = {range};
+    } else {
+      RCLCPP_WARN(this->get_logger(), "Parameter type of parameter '%s' does not support specifying a range", name.c_str());
+    }
+  }
+
+  this->declare_parameter<T>(name, param, param_desc);
+
+  try {
+    param = this->get_parameter(name).get_value<T>();
+  } catch (const rclcpp::exceptions::ParameterUninitializedException&) {
+    if (is_required) {
+      throw std::runtime_error("Missing required parameter '" + name + "'.");
+    }
+    this->set_parameters({rclcpp::Parameter(name, rclcpp::ParameterValue(param))});
+  }
+}
+
+template void MiddlewareBridge::declareAndLoadParameter<std::string>(
+    const std::string&,
+    std::string&,
+    const std::string&,
+    bool,
+    bool,
+    bool,
+    const std::optional<double>&,
+    const std::optional<double>&,
+    const std::optional<double>&,
+    const std::string&);
+
+template void MiddlewareBridge::declareAndLoadParameter<int>(const std::string&,
+                                                             int&,
+                                                             const std::string&,
+                                                             bool,
+                                                             bool,
+                                                             bool,
+                                                             const std::optional<double>&,
+                                                             const std::optional<double>&,
+                                                             const std::optional<double>&,
+                                                             const std::string&);
+
+template void MiddlewareBridge::declareAndLoadParameter<std::vector<std::string>>(
+    const std::string&,
+    std::vector<std::string>&,
+    const std::string&,
+    bool,
+    bool,
+    bool,
+    const std::optional<double>&,
+    const std::optional<double>&,
+    const std::optional<double>&,
+    const std::string&);
+
+template void MiddlewareBridge::declareAndLoadParameter<std::vector<int64_t>>(
+    const std::string&,
+    std::vector<int64_t>&,
+    const std::string&,
+    bool,
+    bool,
+    bool,
+    const std::optional<double>&,
+    const std::optional<double>&,
+    const std::optional<double>&,
+    const std::string&);
 
 void MiddlewareBridge::declareAndLoadParameters() {
   auto declare_string_array_parameter = [this](const std::string& name, const std::vector<std::string>& default_value,
