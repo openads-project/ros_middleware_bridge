@@ -21,7 +21,7 @@ subscribes to configured local topics, serializes the messages as
 republishes them on the opposite side with the original ROS message type. The
 default launch file starts two instances of the same node, one for side A and
 one for side B, so data can be bridged in both directions between middleware
-domains such as Fast DDS and Zenoh.
+domains such as [eProsima Fast DDS](https://github.com/ros2/rmw_fastrtps) and [Eclipse Zenoh](https://github.com/ros2/rmw_zenoh).
 
 <p align="center">
   <strong>🚀 <a href="#-quick-start">Quick Start</a></strong> • <strong>💻 <a href="#-development">Development</a></strong> • <strong>📝 <a href="#-documentation">Documentation</a></strong>
