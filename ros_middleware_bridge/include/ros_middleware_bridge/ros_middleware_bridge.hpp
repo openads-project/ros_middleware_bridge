@@ -366,7 +366,7 @@ class MiddlewareBridge : public rclcpp::Node {
   std::thread shm_receiver_thread_;
   std::mutex send_mutex_;
   std::atomic<std::uint32_t> next_message_id_{1};
-  struct sockaddr_in tx_address_{};
+  struct sockaddr_in tx_address_ {};
 
   static constexpr std::uint32_t kPacketMagic = 0x4D424452;  // "MBDR"
   static constexpr std::uint16_t kPacketVersion = 2;

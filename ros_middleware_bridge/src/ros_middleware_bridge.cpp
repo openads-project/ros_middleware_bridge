@@ -895,7 +895,7 @@ void MiddlewareBridge::setupSockets() {
     throw std::runtime_error("Failed to parse remote_host '" + remote_host_ + "' as IPv4 address.");
   }
 
-  struct sockaddr_in rx_address{};
+  struct sockaddr_in rx_address {};
   rx_address.sin_family = AF_INET;
   rx_address.sin_port = htons(static_cast<uint16_t>(rx_port_));
   rx_address.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -913,7 +913,7 @@ void MiddlewareBridge::setupSharedMemoryChannel(BridgeChannel& channel, const st
 
   const std::size_t mapping_size = sizeof(ShmChannelHeader) + static_cast<std::size_t>(max_shm_message_bytes_);
   const std::string shm_name = "/mb_" + ns + "_ch_" + std::to_string(channel_index);
-  struct statvfs shm_stats{};
+  struct statvfs shm_stats {};
   if (::statvfs("/dev/shm", &shm_stats) == 0) {
     const std::uint64_t available_bytes =
         static_cast<std::uint64_t>(shm_stats.f_bavail) * static_cast<std::uint64_t>(shm_stats.f_frsize);
@@ -1346,7 +1346,7 @@ void MiddlewareBridge::receiverLoop() {
     publisher->publish(serialized_message);
   };
 
-  struct sockaddr_in source_address{};
+  struct sockaddr_in source_address {};
   socklen_t source_length = sizeof(source_address);
 
   while (receiver_running_.load() && rclcpp::ok()) {
