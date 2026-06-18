@@ -103,7 +103,6 @@ Development and maintenance of this repository are supported by the following pr
 | [AIGGREGATE](https://aiggregate.eu/) | 🇪🇺 European Union | 101202457 |
 
 <p>
-  <img src="https://www.drought.uni-freiburg.de/stressres/images/bmftr-logo/image" height=70>
   <img src="https://ec.europa.eu/regional_policy/images/information-sources/logo-download-center/eu_funded_en.jpg" height=70>
 </p>
 
