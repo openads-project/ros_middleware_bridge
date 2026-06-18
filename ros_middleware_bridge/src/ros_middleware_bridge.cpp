@@ -1552,6 +1552,14 @@ void MiddlewareBridge::closeSharedMemoryChannels() {
 
 }  // namespace ros_middleware_bridge
 
+/**
+ * @brief Start the ROS middleware bridge node.
+ *
+ * @param[in] argc Number of command-line arguments.
+ * @param[in] argv Command-line argument values.
+ *
+ * @return Process exit code.
+ */
 int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
 
