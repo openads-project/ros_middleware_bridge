@@ -32,6 +32,26 @@ class MiddlewareBridge : public rclcpp::Node {
   MiddlewareBridge();
 
   /**
+   * @brief Disable copying because the node owns sockets, threads, and shared-memory mappings.
+   */
+  MiddlewareBridge(const MiddlewareBridge&) = delete;
+
+  /**
+   * @brief Disable copy assignment because the node owns sockets, threads, and shared-memory mappings.
+   */
+  MiddlewareBridge& operator=(const MiddlewareBridge&) = delete;
+
+  /**
+   * @brief Disable moving because background threads capture this node instance.
+   */
+  MiddlewareBridge(MiddlewareBridge&&) = delete;
+
+  /**
+   * @brief Disable move assignment because background threads capture this node instance.
+   */
+  MiddlewareBridge& operator=(MiddlewareBridge&&) = delete;
+
+  /**
    * @brief Stop receiver threads and release shared-memory resources.
    */
   ~MiddlewareBridge() override;
@@ -194,7 +214,7 @@ class MiddlewareBridge : public rclcpp::Node {
    *
    * @return QoS profile for bridge output publishers.
    */
-  BridgeQosProfile defaultQosForTopic(const std::string& topic_name, std::size_t fallback_depth) const;
+  static BridgeQosProfile defaultQosForTopic(const std::string& topic_name, std::size_t fallback_depth);
 
   /**
    * @brief Resolve QoS from discovered source publishers, falling back to a topic default.
@@ -214,7 +234,7 @@ class MiddlewareBridge : public rclcpp::Node {
   /**
    * @brief Convert a bridge QoS profile to an rclcpp QoS object.
    */
-  rclcpp::QoS makeRclcppQos(const BridgeQosProfile& qos) const;
+  static rclcpp::QoS makeRclcppQos(const BridgeQosProfile& qos);
 
   /**
    * @brief Create the ROS subscription and publisher endpoints for a channel.
