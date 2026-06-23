@@ -1,0 +1,95 @@
+/**:
+  ros__parameters:
+    # Number of threads used by the rclcpp MultiThreadedExecutor.
+    num_threads: 8
+
+    # Bridge side selector ("a" or "b") is set per launched node.
+    # The default launch file overrides this with "a" for side A and "b" for side B.
+    # bridge_side: a
+
+    # IPv4 destination used for UDP sends.
+    remote_host: 127.0.0.1
+
+    # Prefix used for shared-memory channel names.
+    shm_namespace: ros_middleware_bridge
+
+    # UDP socket send/receive buffer size in bytes.
+    socket_buffer_bytes: 1048576
+
+    # Maximum UDP datagram payload per fragment, including the bridge fragment header.
+    max_udp_payload_bytes: 60000
+
+    # Maximum message size per shared-memory channel. 50331648 bytes = 48 MiB,
+    # matching the default used by rmw_zenoh.
+    max_shm_message_bytes: 50331648
+
+    # Poll interval for the shared-memory receiver loop, in microseconds.
+    shm_poll_interval_us: 1000
+
+    # Timeout for discarding incomplete UDP fragment reassembly, in milliseconds.
+    reassembly_timeout_ms: 1000
+
+    # Optional wait before the initial auto-discovery scan, in milliseconds.
+    # Set to 0 to disable the startup wait.
+    auto_discovery_wait_ms: 1000
+
+    # Poll interval for runtime auto-discovery scans, in milliseconds.
+    auto_discovery_poll_ms: 1000
+
+    # UDP ports are set per launched node by the default launch file.
+    # Side A defaults to tx_port=17001 and rx_port=17002.
+    # Side B defaults to tx_port=17002 and rx_port=17001.
+    # tx_port: 17001
+    # rx_port: 17002
+
+    # Generic example routes (replace with your own topics/types).
+
+    # Side A -> side B topics.
+    # Static mode: list explicit topic names.
+    # Auto mode: set to ["__auto__"] or omit this value, then use side_a2b.topic_types as filters.
+    side_a2b.topics:
+      - /bridge/input_string
+
+    # Side A -> side B message types.
+    # Static mode: one type per topic.
+    # Auto mode: type filters for discovered topics.
+    side_a2b.topic_types:
+      - std_msgs/msg/String
+
+    # Side A -> side B transport per topic/type. Supported values: udp, shm.
+    # May be empty, a single value, or one value per topic in static mode.
+    # May be empty, a single value, or one value per type in auto mode.
+    side_a2b.transports:
+      - udp
+
+    # Side A -> side B minimum/fallback QoS KeepLast depth.
+    # May be empty, a single value, or one value per topic/type.
+    side_a2b.qos_depths:
+      - 10
+
+    # Side B -> side A topics.
+    # Static mode: list explicit topic names.
+    # Auto mode: set to ["__auto__"] or omit this value, then use side_b2a.topic_types as filters.
+    side_b2a.topics:
+      - /bridge/output_string
+      - /bridge/output_image
+
+    # Side B -> side A message types.
+    # Static mode: one type per topic.
+    # Auto mode: type filters for discovered topics.
+    side_b2a.topic_types:
+      - std_msgs/msg/String
+      - sensor_msgs/msg/Image
+
+    # Side B -> side A transport per topic/type. Supported values: udp, shm.
+    # May be empty, a single value, or one value per topic in static mode.
+    # May be empty, a single value, or one value per type in auto mode.
+    side_b2a.transports:
+      - udp
+      - shm
+
+    # Side B -> side A minimum/fallback QoS KeepLast depth.
+    # May be empty, a single value, or one value per topic/type.
+    side_b2a.qos_depths:
+      - 10
+      - 5

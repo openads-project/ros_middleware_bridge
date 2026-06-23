@@ -3,9 +3,9 @@ repositories:
     type: git
     url: https://github.com/ika-rwth-aachen/perception_interfaces.git
     version: main
-  ad2etsi:
+  planning_interfaces:
     type: git
-    url: https://gitlab.ika.rwth-aachen.de/fb-fi/definitions/ad2etsi.git
+    url: https://github.com/ika-rwth-aachen/planning_interfaces.git
     version: main
   ros-carla-msgs:
     type: git
