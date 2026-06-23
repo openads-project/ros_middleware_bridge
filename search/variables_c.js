@@ -1,0 +1,28 @@
+var searchData=
+[
+  ['send_5fmutex_5f_0',['send_mutex_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a44ac897be1cf85a40eda7ea3bf2e41d5',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['sequence_1',['sequence',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1ShmChannelHeader.html#afb23536647ddc15799c858305e2e50a6',1,'ros_middleware_bridge::MiddlewareBridge::ShmChannelHeader']]],
+  ['shm_5ffd_2',['shm_fd',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#aff5343cb41e9fe557a40efe8c55b3d01',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]],
+  ['shm_5fheader_3',['shm_header',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#aee3430882b52e10b8b167a8f3c55f575',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]],
+  ['shm_5flast_5fsequence_4',['shm_last_sequence',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#ae368f4acc1984233e94170b889723cf8',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]],
+  ['shm_5fmapping_5',['shm_mapping',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#af31394873ab96c583eeb97fcb2917ec0',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]],
+  ['shm_5fmapping_5fsize_6',['shm_mapping_size',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#a8b1008f73cda507949dacbd178baf410',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]],
+  ['shm_5fnamespace_5f_7',['shm_namespace_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a343826d90ec184c094e4b977156c4e57',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['shm_5fpayload_8',['shm_payload',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#af73215970704683399dc0fe39b0ef562',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]],
+  ['shm_5fpoll_5finterval_5fus_5f_9',['shm_poll_interval_us_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a159f938633653a2ccf679887d41520e2',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['shm_5fread_5fbuffer_10',['shm_read_buffer',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#aeff133f305b5c06d11fe4f995d9343a6',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]],
+  ['shm_5freceiver_5fthread_5f_11',['shm_receiver_thread_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a63674df8d29efd85570007f90960bc88',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fa2b_5fauto_5fdiscovery_5f_12',['side_a2b_auto_discovery_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#ac95f03809d64a28703b6a872bc02dcad',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fa2b_5fqos_5fdepths_5f_13',['side_a2b_qos_depths_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#ac99ee3dfdf25d28b789e75186351655f',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fa2b_5ftopic_5ftypes_5f_14',['side_a2b_topic_types_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#ac1637873f5a996148f0cc6c56c56cd1d',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fa2b_5ftopics_5f_15',['side_a2b_topics_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a621ad1f5a2c38e512a871fe7a9f44474',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fa2b_5ftransports_5f_16',['side_a2b_transports_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a2cf2c664514214b56038d361f57a7402',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fb2a_5fauto_5fdiscovery_5f_17',['side_b2a_auto_discovery_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#af9c8f26c15ee8254db0e57ca49805e98',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fb2a_5fqos_5fdepths_5f_18',['side_b2a_qos_depths_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a8b7b63721be1fda40d1d20cd3194c4a9',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fb2a_5ftopic_5ftypes_5f_19',['side_b2a_topic_types_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#ab34a995bd8df94c4cf4860e7af09e600',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fb2a_5ftopics_5f_20',['side_b2a_topics_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a1b89000d9489eb8f60fd6ea55aeff0ce',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['side_5fb2a_5ftransports_5f_21',['side_b2a_transports_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a7add839339b9415406b7035e7f98ef5d',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['socket_5fbuffer_5fbytes_5f_22',['socket_buffer_bytes_',['../classros__middleware__bridge_1_1MiddlewareBridge.html#a899eac964407f7fc1f8bf0b0975f0cba',1,'ros_middleware_bridge::MiddlewareBridge']]],
+  ['subscribe_5ftopic_23',['subscribe_topic',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#a9bd64f97217269efb5d030a28251151f',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]],
+  ['subscriber_24',['subscriber',['../structros__middleware__bridge_1_1MiddlewareBridge_1_1BridgeChannel.html#a96b18f75d915819bec2e1bbd6cfaaff2',1,'ros_middleware_bridge::MiddlewareBridge::BridgeChannel']]]
+];
