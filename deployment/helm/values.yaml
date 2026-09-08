@@ -1,6 +1,6 @@
 openadservice:
   name: ros-middleware-bridge
-  image: ghcr.io/openads-project/ros_middleware_bridge:v1.2.0
+  image: ghcr.io/openads-project/ros_middleware_bridge:v1.2.1
   env:
     # --- name ------
     NAMESPACE: /
